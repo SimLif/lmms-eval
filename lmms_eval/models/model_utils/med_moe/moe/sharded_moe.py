@@ -184,7 +184,8 @@ def top1gating(logits: Tensor,
                noisy_gate_policy: Optional[str] = None,
                drop_tokens: bool = True,
                use_rts: bool = True,
-               use_tutel: bool = False) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
+               use_tutel: bool = False,
+               token_type_ids: list = None) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
     """Implements Top1Gating on logits."""
     if noisy_gate_policy == 'RSample':
         logits_w_noise = logits + gumbel_rsample(logits.shape, device=logits.device)
@@ -205,6 +206,14 @@ def top1gating(logits: Tensor,
 
     # gating decisions
     exp_counts = torch.sum(mask1, dim=0).detach().to('cpu')
+
+    if token_type_ids is not None:
+        token_type_ids_tensor = torch.tensor(token_type_ids, device=mask1.device)
+        text_mask = (token_type_ids_tensor == 0).unsqueeze(1)  # shape: (num_tokens, 1)
+        image_mask = (token_type_ids_tensor == 1).unsqueeze(1)  # shape: (num_tokens, 1)
+
+        text_exp_counts = torch.sum(mask1 * text_mask, dim=0).detach().cpu()
+        image_exp_counts = torch.sum(mask1 * image_mask, dim=0).detach().cpu()
 
     # if we don't want to drop any tokens
     if not drop_tokens:
@@ -273,10 +282,21 @@ def top1gating(logits: Tensor,
 
     dispatch_mask = combine_weights.bool()
 
+    if token_type_ids is not None:
+        exp_counts = {
+            'exp_counts': exp_counts.tolist(),
+            'text_exp_counts': text_exp_counts.tolist(),
+            'image_exp_counts': image_exp_counts.tolist()
+        }
+    else:
+        exp_counts = {
+            'exp_counts': exp_counts.tolist()
+        }
+
     return l_aux, combine_weights, dispatch_mask, exp_counts
 
 
-def top2gating(logits: Tensor, capacity_factor: float, min_capacity: int) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
+def top2gating(logits: Tensor, capacity_factor: float, min_capacity: int, token_type_ids: list = None) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
     """Implements Top2Gating on logits."""
     # everything is in fp32 in this function
     gates = F.softmax(logits, dim=1)
@@ -304,6 +324,17 @@ def top2gating(logits: Tensor, capacity_factor: float, min_capacity: int) -> Tup
 
     # gating decisions
     exp_counts = torch.sum(mask1, dim=0).detach().to('cpu')
+    exp_counts += torch.sum(mask2, dim=0).detach().to('cpu')
+
+    if token_type_ids is not None:
+        token_type_ids_tensor   = torch.tensor(token_type_ids, device=mask1.device)
+        text_mask               = (token_type_ids_tensor == 0).unsqueeze(1)
+        image_mask              = (token_type_ids_tensor == 1).unsqueeze(1)
+
+        text_exp_counts     = torch.sum(mask1 * text_mask, dim=0).detach().cpu()
+        text_exp_counts    += torch.sum(mask2 * text_mask, dim=0).detach().cpu()
+        image_exp_counts    = torch.sum(mask1 * image_mask, dim=0).detach().cpu()
+        image_exp_counts   += torch.sum(mask2 * image_mask, dim=0).detach().cpu()
 
     # Compute l_aux
     me = torch.mean(gates, dim=0)
@@ -338,6 +369,17 @@ def top2gating(logits: Tensor, capacity_factor: float, min_capacity: int) -> Tup
     combine2_sec = einsum("se,sc->sec", gates2, locations2_sc)
     combine_weights = combine1_sec + combine2_sec
     dispatch_mask = combine_weights.bool()
+
+    if token_type_ids is not None:
+        exp_counts = {
+            'exp_counts':       exp_counts.tolist(),
+            'text_exp_counts':  text_exp_counts.tolist(),
+            'image_exp_counts': image_exp_counts.tolist()
+        }
+    else:
+        exp_counts = {
+            'exp_counts': exp_counts.tolist()
+        }
 
     return l_aux, combine_weights, dispatch_mask, exp_counts
 
@@ -408,7 +450,8 @@ class TopKGate(Module):
     def forward(self,
                 input: torch.Tensor,
                 used_token: torch.Tensor = None,
-                use_tutel: bool = False) -> Tuple[Tensor, Tensor, Tensor]:  # type: ignore
+                use_tutel: bool = False,
+                token_type_ids: list = None) -> Tuple[Tensor, Tensor, Tensor]:  # type: ignore
 
         if self.wall_clock_breakdown:
             self.timers('TopKGate').start()
@@ -424,11 +467,11 @@ class TopKGate(Module):
         if self.k == 1:
             gate_output = top1gating(logits, self.capacity_factor if self.training else self.eval_capacity_factor,
                                      self.min_capacity, used_token, self.noisy_gate_policy if self.training else None,
-                                     self.drop_tokens, self.use_rts, use_tutel)
+                                     self.drop_tokens, self.use_rts, use_tutel, token_type_ids=token_type_ids)
 
         else:
             gate_output = top2gating(logits, self.capacity_factor if self.training else self.eval_capacity_factor,
-                                     self.min_capacity)
+                                     self.min_capacity, token_type_ids=token_type_ids)
 
         if self.wall_clock_breakdown:
             self.timers('TopKGate').stop()
@@ -503,7 +546,7 @@ class MOELayer(Base):
         reshaped_input = input[0].reshape(-1, d_model)
 
         if self.use_tutel:
-            self.l_aux, C, E, indices_, locations_, gates_, self.exp_counts = self.gate(reshaped_input, input[1], True)
+            self.l_aux, C, E, indices_, locations_, gates_, self.exp_counts = self.gate(reshaped_input, input[1], True, token_type_ids=kwargs.get('token_type_ids', None))
             S, M = reshaped_input.size(0), reshaped_input.size(1)
 
             if not hasattr(self, '_tutel_dispatcher'):
@@ -511,7 +554,7 @@ class MOELayer(Base):
             self._tutel_dispatcher.update(indices_, locations_, gates_, capacity=C)
             dispatched_input = self._tutel_dispatcher.encode(reshaped_input)
         else:
-            self.l_aux, combine_weights, dispatch_mask, self.exp_counts = self.gate(reshaped_input, input[1])
+            self.l_aux, combine_weights, dispatch_mask, self.exp_counts = self.gate(reshaped_input, input[1], token_type_ids=kwargs.get('token_type_ids', None))
             dispatched_input = einsum("sec,sm->ecm", dispatch_mask.type_as(input[0]), reshaped_input)
 
         if self.wall_clock_breakdown:

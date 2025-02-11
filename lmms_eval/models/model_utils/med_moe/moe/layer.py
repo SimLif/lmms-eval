@@ -99,7 +99,7 @@ class MoE(torch.nn.Module):
         # Set the group handle for the MOELayer (deepspeed_moe) object
         self.deepspeed_moe._set_ep_group(groups._get_expert_parallel_group(self.expert_group_name))
 
-    def forward(self, hidden_states, used_token=None):
+    def forward(self, hidden_states, used_token=None, token_type_ids=None):
         """ MoE forward
 
         Arguments:
@@ -115,7 +115,7 @@ class MoE(torch.nn.Module):
 
             * exp_counts (int): expert count
         """
-        output = self.deepspeed_moe(hidden_states, used_token)
+        output = self.deepspeed_moe(hidden_states, used_token, token_type_ids=token_type_ids)
         mea_output=self.meta_moe(hidden_states)
         if self.use_residual:
             # Residual MoE
@@ -126,4 +126,5 @@ class MoE(torch.nn.Module):
             coef = torch.nn.functional.softmax(coef, dim=-1)
             output = output * coef[..., 0:1] + output_mlp * coef[..., 1:]
         output=output+mea_output
+
         return output, self.deepspeed_moe.l_aux, self.deepspeed_moe.exp_counts
