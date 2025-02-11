@@ -18,10 +18,10 @@ warnings.simplefilter("ignore", category=DeprecationWarning)
 warnings.filterwarnings("ignore")
 
 os.environ['LD_LIBRARY_PATH'] = f"{os.environ.get('LD_LIBRARY_PATH', '')}:/lib/x86_64-linux-gnu:/usr/lib/x86_64-linux-gnu:/usr/local/cuda/lib64"
-from model_utils.med_moe.llava_phi_moe import MoELLaVAPhiConfig, EvalMoELLaVAPhiForCausalLM
-from model_utils.med_moe.conversation import conv_templates, SeparatorStyle
-from model_utils.med_moe.constants import *
-from model_utils.med_moe.mm_utils import tokenizer_image_token, get_model_name_from_path, KeywordsStoppingCriteria
+from .model_utils.med_moe.llava_phi_moe import MoELLaVAPhiConfig, EvalMoELLaVAPhiForCausalLM
+from .model_utils.med_moe.conversation import conv_templates, SeparatorStyle
+from .model_utils.med_moe.constants import *
+from .model_utils.med_moe.mm_utils import tokenizer_image_token, get_model_name_from_path, KeywordsStoppingCriteria
 
 from loguru import logger as eval_logger
 from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -80,7 +80,7 @@ class Med_MoE_Phi(lmms):
         image_tower = self.model.get_image_tower()
         if not image_tower.is_loaded:
             image_tower.load_model()
-        image_tower.to(device=self._device, dtype=torch.float16)
+        image_tower.to(device=self._device)
         self._image_processor = image_tower.image_processor
 
         self._conv_templates = conv_templates['phi']
@@ -223,8 +223,8 @@ class Med_MoE_Phi(lmms):
             if len(visuals) > 1:
                 raise ValueError("Only one visual is supported for now")
             image_tensor = self._image_processor.preprocess(
-                visuals[0], return_tensor='pt'
-            )['pixel_values'].to(self.model.device, dtype=torch.float16) 
+                visuals[0], return_tensors='pt'
+            )['pixel_values'].to(self.model.device) 
 
             
             conv = self._conv_templates.copy()
@@ -258,9 +258,12 @@ class Med_MoE_Phi(lmms):
             if "num_beams" not in gen_kwargs:
                 gen_kwargs["num_beams"] = 1
 
+            pad_token_id = self.tokenizer.pad_token_id if self.tokenizer.pad_token_id is not None else self.eot_token_id
+
             cont = self.model.generate(
                 input_ids,
                 images=image_tensor,
+                pad_token_id=pad_token_id,
                 do_sample=True if gen_kwargs["temperature"] > 0 else False,
                 temperature=gen_kwargs["temperature"],
                 max_new_tokens=gen_kwargs["max_new_tokens"],
@@ -268,7 +271,7 @@ class Med_MoE_Phi(lmms):
                 stopping_criteria=[stopping_criteria]
             )
 
-            text_outputs = tokenizer.decode(output_ids[0, input_ids.shape[1]:], skip_special_tokens=True).strip()
+            text_outputs = self.tokenizer.decode(cont[0, input_ids.shape[1]:], skip_special_tokens=True).strip()
             res.append(text_outputs)
             self.cache_hook.add_partial("generate_until", (context, gen_kwargs), text_outputs)
             pbar.update(1)
