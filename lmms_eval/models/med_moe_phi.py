@@ -54,17 +54,18 @@ class Med_MoE_Phi(lmms):
             self._device = device
 
         # Load the model
-        cfg_pretrained = MoELLaVAPhiConfig.from_pretrained(pretrained)
         self._model = EvalMoELLaVAPhiForCausalLM.from_pretrained(
             pretrained,
             device_map=self._device,
-            # low_cpu_mem_usage=True,
-            config=cfg_pretrained,
-            trust_remote_code=trust_remote_code,
+            torch_dtype=torch.float16,
         ).eval()
 
         # Load the tokenizer
-        self._tokenizer = AutoTokenizer.from_pretrained(pretrained, trust_remote_code=trust_remote_code)
+        self._tokenizer = AutoTokenizer.from_pretrained(
+            pretrained,
+            use_fast=False,
+            padding_side="right",
+        )
         self._config = self._model.config
         mm_use_im_start_end = getattr(self.config, "mm_use_im_start_end", False)
         mm_use_im_patch_token = getattr(self.config, "mm_use_im_patch_token", True)
@@ -75,12 +76,13 @@ class Med_MoE_Phi(lmms):
             self._tokenizer.add_tokens([DEFAULT_IM_START_TOKEN, DEFAULT_IM_END_TOKEN], special_tokens=True)
             self._tokenizer.add_tokens([DEFAULT_VID_START_TOKEN, DEFAULT_VID_END_TOKEN], special_tokens=True)
         self.model.resize_token_embeddings(len(self._tokenizer))
+        self.model.config.eos_token_id = self.eot_token_id
 
         # Load the image processor
         image_tower = self.model.get_image_tower()
         if not image_tower.is_loaded:
             image_tower.load_model()
-        image_tower.to(device=self._device)
+        image_tower.to(device=self._device, dtype=torch.float16)
         self._image_processor = image_tower.image_processor
 
         self._conv_templates = conv_templates['phi']
@@ -224,11 +226,10 @@ class Med_MoE_Phi(lmms):
                 raise ValueError("Only one visual is supported for now")
             image_tensor = self._image_processor.preprocess(
                 visuals[0], return_tensors='pt'
-            )['pixel_values'].to(self.model.device) 
+            )['pixel_values'].to(self.model.device, dtype=torch.float16) 
 
             
             conv = self._conv_templates.copy()
-            roles = conv.roles
             context = DEFAULT_IMAGE_TOKEN + '\n' + context
             conv.append_message(conv.roles[0], context)
             conv.append_message(conv.roles[1], None)
@@ -239,24 +240,21 @@ class Med_MoE_Phi(lmms):
                 IMAGE_TOKEN_INDEX, 
                 return_tensors='pt'
             ).unsqueeze(0).to(self.model.device)
-            stop_str = conv.sep if conv.sep_style != SeparatorStyle.TWO else conv.sep2
-            keywords = [stop_str]
-            stopping_criteria = KeywordsStoppingCriteria(keywords, self.tokenizer, input_ids)
+
+            if gen_kwargs.get("answer_type", None) == "closed":
+                stop_str = conv.sep if conv.sep_style != SeparatorStyle.TWO else conv.sep2
+                keywords = [stop_str]
+                stopping_criteria = KeywordsStoppingCriteria(keywords, self.tokenizer, input_ids)
+            else:
+                stopping_criteria = None
 
             # preconfigure gen_kwargs with defaults
-            if "image_sizes" not in gen_kwargs:
-                try:
-                    gen_kwargs["image_sizes"] = [visuals[0].size]
-                except:
-                    gen_kwargs["image_sizes"] = None
             if "max_new_tokens" not in gen_kwargs:
-                gen_kwargs["max_new_tokens"] = 1024
+                gen_kwargs["max_new_tokens"] = 2048
             if "temperature" not in gen_kwargs:
-                gen_kwargs["temperature"] = 0.2
+                gen_kwargs["temperature"] = 0
             if "top_p" not in gen_kwargs:
                 gen_kwargs["top_p"] = None
-            if "num_beams" not in gen_kwargs:
-                gen_kwargs["num_beams"] = 1
 
             pad_token_id = self.tokenizer.pad_token_id if self.tokenizer.pad_token_id is not None else self.eot_token_id
 
@@ -267,8 +265,7 @@ class Med_MoE_Phi(lmms):
                 do_sample=True if gen_kwargs["temperature"] > 0 else False,
                 temperature=gen_kwargs["temperature"],
                 max_new_tokens=gen_kwargs["max_new_tokens"],
-                use_cache=self.use_cache,
-                stopping_criteria=[stopping_criteria]
+                stopping_criteria=[stopping_criteria] if stopping_criteria is not None else None
             )
 
             text_outputs = self.tokenizer.decode(cont[0, input_ids.shape[1]:], skip_special_tokens=True).strip()
