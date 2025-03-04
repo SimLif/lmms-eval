@@ -34,3 +34,40 @@ def calculate_exactmatch(candidate, reference):
         return 0 # "0 (warning: length of candidate's words is 0)"
     else:
         return count / total
+
+
+def calculate_f1score(candidate, reference):
+
+    candidate = normalize_word(candidate)
+    reference = normalize_word(reference)
+
+    candidate_words = split_sentence(candidate, 1)
+    reference_words = split_sentence(reference, 1)
+    word_set = set()
+    for word in candidate_words:
+        word_set.add(word)
+    for word in reference_words:
+        word_set.add(word)
+    
+    tp = 0
+    fp = 0
+    fn = 0
+    for word in word_set:
+        if word in candidate_words and word in reference_words:
+            tp += candidate_words[word]
+        elif word in candidate_words and word not in reference_words:
+            fp += candidate_words[word]
+        elif word not in candidate_words and word in reference_words:
+            fn += reference_words[word]
+    
+    if len(candidate_words) == 0:
+        return 0, 0, 0 # "0 (warning: length of candidate's words is 0)"
+    elif len(reference_words) == 0:
+        return 0, 0, 0
+    else:
+        precision = tp / (tp + fp)
+        recall = tp / (tp + fn)
+        if tp == 0:
+            return 0, 0, 0
+        else:
+            return 2 * precision * recall / (precision + recall), precision, recall
