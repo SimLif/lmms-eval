@@ -10,7 +10,7 @@ dir_name = os.path.dirname(os.path.abspath(__file__))
 
 
 from lmms_eval.tasks._task_utils.file_utils import generate_submission_file
-from lmms_eval.tasks.vqa_rad.metrics import calculate_exactmatch
+from lmms_eval.tasks.vqa_rad.metrics import calculate_exactmatch, calculate_f1score
 
 
 replace_prompt = " Please answer yes or no."
@@ -31,7 +31,7 @@ def vqa_rad_doc_to_text(doc, lmms_eval_specific_kwargs=None):
     return question
 
 
-def vqa_rad_process_results(doc, results):
+def vqa_rad_open_process_results(doc, results):
     """
     Args:
         doc: a instance of the eval dataset
@@ -40,13 +40,26 @@ def vqa_rad_process_results(doc, results):
         a dictionary with key: metric name (in this case mme score), value: metric value
     """
     pred = results[0]
-    # pred_ans = pred.lower().strip().replace(".", "")
-    pred_ans = pred.lower()
-    # gt_ans = doc["answer"].lower().strip().replace(".", "")
-    gt_ans = doc["answer"].lower()
+    pred_ans = pred.lower().strip().replace(".", "")
+    gt_ans = doc["answer"].lower().strip().replace(".", "")
 
-    exact_match = calculate_exactmatch(pred_ans, gt_ans)
+    # exact_match = calculate_exactmatch(pred_ans, gt_ans)
+    f1_score, precision, recall = calculate_f1score(pred_ans, gt_ans)
 
     return {
-        "exact_match": exact_match,
+        # "exact_match": exact_match,
+        # "f1": f1_score,
+        # "precision": precision,
+        "recall": recall * 100,
     }
+
+
+def vqa_rad_closed_process_results(doc, results):
+    pred = results[0]
+    pred_ans = pred.lower().strip().replace(".", "")
+    gt_ans = doc["answer"].lower().strip().replace(".", "")
+
+    if gt_ans not in pred_ans:
+        return {"accuracy": 0}
+    else:
+        return {"accuracy": 100}
