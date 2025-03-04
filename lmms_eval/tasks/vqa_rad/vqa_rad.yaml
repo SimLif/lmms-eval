@@ -1,3 +1,6 @@
-group: mmbench
+group: vqa_rad
 task:
   - vqa_rad_open
+  - vqa_rad_closed
+metadata:
+  - version: 1.0
