@@ -176,7 +176,7 @@ class LlavaMetaForCausalLM(ABC):
                     device=attention_mask.device
                 )), dim=1)
                 position_ids = torch.sum(attention_mask, dim=1).unsqueeze(-1) - 1
-            return input_ids, position_ids, attention_mask, past_key_values, None, labels, None
+            return input_ids, position_ids, attention_mask, past_key_values, None, labels
 
 
 
@@ -304,26 +304,6 @@ class LlavaMetaForCausalLM(ABC):
                     cur_new_input_embeds.append(cur_image_features)
                     cur_new_labels.append(torch.full((cur_image_features.shape[0],), IGNORE_INDEX, device=cur_labels.device, dtype=cur_labels.dtype))
 
-                    if num_images.item() == 1:
-                        def create_token_type_ids(token_ids_len, image_token_indice, image_features_len):
-                            token_type_ids = [0] * token_ids_len
-                            
-                            if 0 <= image_token_indice < token_ids_len:
-                                token_type_ids = (
-                                    token_type_ids[:image_token_indice]
-                                    + [1] * image_features_len
-                                    + token_type_ids[image_token_indice + 1:]
-                                )
-                            
-                            return token_type_ids
-                        
-                        token_type_ids = create_token_type_ids(cur_input_ids.shape[0], image_token_indices[1], cur_image_features.shape[0])
-
-                    else:
-                        print('WARNING: not implemented for multiple images in a sequence')
-                        token_type_ids = None
-
-
             cur_new_input_embeds = torch.cat(cur_new_input_embeds)
             cur_new_labels = torch.cat(cur_new_labels)
 
@@ -385,7 +365,7 @@ class LlavaMetaForCausalLM(ABC):
         if _position_ids is None:
             position_ids = None
 
-        return None, position_ids, attention_mask, past_key_values, new_input_embeds, new_labels, token_type_ids
+        return None, position_ids, attention_mask, past_key_values, new_input_embeds, new_labels
 
     def initialize_vision_tokenizer(self, model_args, tokenizer):
         if model_args.mm_use_im_patch_token:

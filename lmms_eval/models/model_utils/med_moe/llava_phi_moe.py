@@ -13,7 +13,6 @@
 #    limitations under the License.
 
 
-import json
 from typing import List, Optional, Tuple, Union
 
 import torch
@@ -117,9 +116,6 @@ def MoEPhiDecoderLayer_forward(self):
             past_key_value: Optional[Tuple[torch.Tensor]] = None,
             output_attentions: Optional[bool] = False,
             use_cache: Optional[bool] = False,
-            layer_idx: Optional[int] = None,
-            moe_layer: Optional[bool] = False,
-            token_type_ids: Optional[list] = None,
             padding_mask: Optional[torch.LongTensor] = None,
     ) -> Tuple[torch.FloatTensor, Optional[Tuple[torch.FloatTensor, torch.FloatTensor]]]:
         residual = hidden_states
@@ -135,23 +131,11 @@ def MoEPhiDecoderLayer_forward(self):
         )
         attn_outputs = self.resid_dropout(attn_outputs)
 
-        if moe_layer:
-            hidden_states = self.mlp(hidden_states, token_type_ids=token_type_ids)
-        else:
-            hidden_states = self.mlp(hidden_states)
+        hidden_states = self.mlp(hidden_states)
 
         moe_losses = []
         if len(hidden_states) == 3:
             moe_losses.append(hidden_states[1])
-
-            # tmp_file_path = '/mnt/data/haoqiang/workspace/01-med-moe/results/exp_counts_vqa_rad_tmp.json'
-            # tmp_file_path = '/mnt/data/haoqiang/workspace/01-med-moe/results/exp_counts_slake_tmp.json'
-            # tmp_file_path = '/mnt/data/haoqiang/workspace/01-med-moe/results/exp_counts_path_vqa_tmp.json'
-            # tmp_file_path = '/mnt/data/haoqiang/workspace/01-med-moe/results/exp_counts_vqa_med_2019_tmp.json'
-            # with open(tmp_file_path, 'a') as f:
-            #     json.dump({layer_idx: hidden_states[2]}, f)
-            #     f.write('\n')
-
             hidden_states = hidden_states[0]
         hidden_states = attn_outputs + self.resid_dropout(hidden_states) + residual
 
@@ -183,7 +167,6 @@ def MoEPhiModel_forward(self):
             output_hidden_states: Optional[bool] = None,
             return_dict: Optional[bool] = None,
             output_moe_loss: Optional[bool] = True,
-            token_type_ids: Optional[list] = None,
     ) -> Union[Tuple, MoEBaseModelOutputWithPast]:
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
         output_hidden_states = (
@@ -250,7 +233,7 @@ def MoEPhiModel_forward(self):
 
 
 
-        for idx, decoder_layer in enumerate(self.layers):
+        for decoder_layer in self.layers:
             if output_hidden_states:
                 all_hidden_states += (hidden_states,)
 
@@ -271,9 +254,6 @@ def MoEPhiModel_forward(self):
                     past_key_value=past_key_values,
                     output_attentions=output_attentions,
                     use_cache=use_cache,
-                    layer_idx=idx,
-                    moe_layer=True if idx in self.config.moe['moe_layers_idx'] else False,
-                    token_type_ids=token_type_ids,
                 )
 
             hidden_states = layer_outputs[0]
@@ -352,8 +332,7 @@ class MoELLaVAPhiForCausalLM(PhiForCausalLM, LlavaMetaForCausalLM):
                 attention_mask,
                 past_key_values,
                 inputs_embeds,
-                labels,
-                token_type_ids,
+                labels
             ) = self.prepare_inputs_labels_for_multimodal(
                 input_ids,
                 position_ids,
@@ -375,7 +354,6 @@ class MoELLaVAPhiForCausalLM(PhiForCausalLM, LlavaMetaForCausalLM):
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
-            token_type_ids=token_type_ids,
         )
         # import ipdb
         # ipdb.set_trace()
@@ -512,7 +490,7 @@ class MoELLaVAPhiForCausalLM(PhiForCausalLM, LlavaMetaForCausalLM):
                 capacity_factor=4,
                 eval_capacity_factor=4,
                 min_capacity=0,
-                router='/mnt/data/haoqiang/workspace/01-med-moe/phi_router.pth',
+                router='Your path',
                 use_residual=model_args.use_residual,
                 training=True,
                 drop_tokens =False,
@@ -551,7 +529,7 @@ class EvalMoELLaVAPhiForCausalLM(MoELLaVAPhiForCausalLM):
                 num_experts=num_experts,
                 outert_expert_mlp=self.model.layers[layer_num].mlp,
                 ep_size=self.config.moe['ep_size'],
-                router='/mnt/data/haoqiang/workspace/01-med-moe/phi_router.pth',
+                router='Your path',
                 k=self.config.moe['top_k_experts'],
                 capacity_factor=4,
                 eval_capacity_factor=4,
