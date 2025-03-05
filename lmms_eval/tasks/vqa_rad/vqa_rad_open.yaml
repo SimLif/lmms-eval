@@ -1,4 +1,4 @@
-tag: "vqa_rad"
+tag: medmoe_vqa
 dataset_path: /mnt/data/haoqiang/workspace/data/medmoe-vqa-rad
 dataset_kwargs:
   token: True
