@@ -1,6 +1,6 @@
-group: vqa_rad
+group: slake
 task:
-  - vqa_rad_open
-  - vqa_rad_closed
+  - slake_open
+  - slake_closed
 metadata:
   - version: 1.0
