@@ -57,6 +57,7 @@ AVAILABLE_MODELS = {
     "aria": "Aria",
     "ross": "Ross",
     "med_moe_phi": "Med_MoE_Phi",
+    "med_moe_stablelm": "Med_MoE_StableLM",
 }
 
 
