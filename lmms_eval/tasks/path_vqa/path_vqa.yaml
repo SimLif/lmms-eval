@@ -1,6 +1,6 @@
-group: vqa_rad
+group: path_vqa
 task:
-  - vqa_rad_open
-  - vqa_rad_closed
+  - path_vqa_open
+  - path_vqa_closed
 metadata:
   - version: 1.0

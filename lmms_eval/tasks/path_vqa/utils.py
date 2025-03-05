@@ -10,17 +10,17 @@ dir_name = os.path.dirname(os.path.abspath(__file__))
 
 
 from lmms_eval.tasks._task_utils.file_utils import generate_submission_file
-from lmms_eval.tasks.vqa_rad.metrics import calculate_exactmatch, calculate_f1score
+from lmms_eval.tasks.path_vqa.metrics import calculate_exactmatch, calculate_f1score
 
 
 replace_prompt = " Please answer yes or no."
 
 
-def vqa_rad_doc_to_visual(doc):
+def path_vqa_doc_to_visual(doc):
     return [doc["image"].convert("RGB")]
 
 
-def vqa_rad_doc_to_text(doc, lmms_eval_specific_kwargs=None):
+def path_vqa_doc_to_text(doc, lmms_eval_specific_kwargs=None):
     question = doc["question"].strip()
     if "pre_prompt" in lmms_eval_specific_kwargs and lmms_eval_specific_kwargs["pre_prompt"] != "":
         question = question.replace(replace_prompt, "")
@@ -31,7 +31,7 @@ def vqa_rad_doc_to_text(doc, lmms_eval_specific_kwargs=None):
     return question
 
 
-def vqa_rad_open_process_results(doc, results):
+def path_vqa_open_process_results(doc, results):
     """
     Args:
         doc: a instance of the eval dataset
@@ -54,7 +54,7 @@ def vqa_rad_open_process_results(doc, results):
     }
 
 
-def vqa_rad_closed_process_results(doc, results):
+def path_vqa_closed_process_results(doc, results):
     pred = results[0]
     pred_ans = pred.lower().strip().replace(".", "")
     gt_ans = doc["answer"].lower().strip().replace(".", "")
