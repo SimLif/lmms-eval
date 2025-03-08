@@ -1,0 +1,1 @@
+bash eval.sh --model med_moe_phi --tasks vqa_rad
