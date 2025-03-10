@@ -4,7 +4,7 @@
 MODEL="med_moe_phi"
 MODEL_SUFFIX=""  # 默认为空
 TASKS="vqa_rad"
-GPU_ID=3
+GPU_ID=0
 
 # 解析命令行参数
 while [[ $# -gt 0 ]]; do
