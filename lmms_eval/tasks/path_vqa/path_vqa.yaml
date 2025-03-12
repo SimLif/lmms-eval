@@ -1,0 +1,6 @@
+group: path_vqa
+task:
+  - path_vqa_open
+  - path_vqa_closed
+metadata:
+  - version: 1.0
