@@ -18,10 +18,10 @@ warnings.simplefilter("ignore", category=DeprecationWarning)
 warnings.filterwarnings("ignore")
 
 os.environ['LD_LIBRARY_PATH'] = f"{os.environ.get('LD_LIBRARY_PATH', '')}:/lib/x86_64-linux-gnu:/usr/lib/x86_64-linux-gnu:/usr/local/cuda/lib64"
-from .model_utils.med_moe.llava_stablelm_moe import EvalMoELLaVAStablelmForCausalLM
-from .model_utils.med_moe.conversation import conv_templates, SeparatorStyle
-from .model_utils.med_moe.constants import *
-from .model_utils.med_moe.mm_utils import tokenizer_image_token, get_model_name_from_path, KeywordsStoppingCriteria
+from lmms_eval.models.model_utils.med_moe.llava_stablelm_moe import EvalMoELLaVAStablelmForCausalLM
+from lmms_eval.models.model_utils.med_moe.conversation import conv_templates, SeparatorStyle
+from lmms_eval.models.model_utils.med_moe.constants import *
+from lmms_eval.models.model_utils.med_moe.mm_utils import tokenizer_image_token, get_model_name_from_path, KeywordsStoppingCriteria
 
 from loguru import logger as eval_logger
 from transformers import AutoModelForCausalLM, AutoTokenizer
