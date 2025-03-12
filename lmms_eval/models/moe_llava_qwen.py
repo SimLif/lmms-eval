@@ -18,25 +18,27 @@ warnings.simplefilter("ignore", category=DeprecationWarning)
 warnings.filterwarnings("ignore")
 
 os.environ['LD_LIBRARY_PATH'] = f"{os.environ.get('LD_LIBRARY_PATH', '')}:/lib/x86_64-linux-gnu:/usr/lib/x86_64-linux-gnu:/usr/local/cuda/lib64"
-from .model_utils.med_moe.llava_phi_moe import MoELLaVAPhiConfig, EvalMoELLaVAPhiForCausalLM
-from .model_utils.med_moe.conversation import conv_templates, SeparatorStyle
-from .model_utils.med_moe.constants import *
-from .model_utils.med_moe.mm_utils import tokenizer_image_token, get_model_name_from_path, KeywordsStoppingCriteria
+from lmms_eval.models.model_utils.moellava.model.language_model.llava_qwen_moe import EvalMoELLaVAQWenForCausalLM
+from lmms_eval.models.model_utils.moellava.model.language_model.qwen.tokenization_qwen import QWenTokenizer
+from lmms_eval.models.model_utils.moellava.conversation import conv_templates, SeparatorStyle
+from lmms_eval.models.model_utils.moellava.constants import DEFAULT_IMAGE_PATCH_TOKEN, DEFAULT_IM_START_TOKEN, DEFAULT_IM_END_TOKEN, \
+    DEFAULT_VID_END_TOKEN, DEFAULT_VID_START_TOKEN, DEFAULT_VIDEO_PATCH_TOKEN, DEFAULT_IMAGE_TOKEN, IMAGE_TOKEN_INDEX
+from lmms_eval.models.model_utils.moellava.mm_utils import tokenizer_image_token, get_model_name_from_path, KeywordsStoppingCriteria
 
 from loguru import logger as eval_logger
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer, GenerationConfig
 
 
-@register_model("med_moe_phi")
-class Med_MoE_Phi(lmms):
+@register_model("moe_llava_qwen")
+class MoE_Llava_Qwen(lmms):
     """
-    Med_MoE Model
-    https://github.com/jiangsongtao/Med-MoE/blob/main/predict.py
+    moellava Model
+    https://github.com/PKU-YuanGroup/MoE-LLaVA/blob/main/moellava/eval/model_vqa_loader.py
     """
 
     def __init__(
         self,
-        pretrained: str = "/mnt/data/haoqiang/workspace/models/Med-MoE/stage3/llavaphi-2.7b-medmoe",
+        pretrained: str = "/mnt/data/haoqiang/workspace/models/moe-llava-qwen-1.8b-4e",
         device: Optional[str] = "cuda",
         batch_size: Optional[Union[int, str]] = 1,
         trust_remote_code: Optional[bool] = True,
@@ -54,19 +56,26 @@ class Med_MoE_Phi(lmms):
             self._device = device
 
         # Load the model
-        self._model = EvalMoELLaVAPhiForCausalLM.from_pretrained(
+        self._model = EvalMoELLaVAQWenForCausalLM.from_pretrained(
             pretrained,
             device_map=self._device,
             torch_dtype=torch.float16,
-        ).eval()
+        )
 
         # Load the tokenizer
-        self._tokenizer = AutoTokenizer.from_pretrained(
+        self._tokenizer = QWenTokenizer.from_pretrained(
             pretrained,
             use_fast=False,
             padding_side="right",
         )
         self._config = self._model.config
+        self.model.generation_config = GenerationConfig.from_pretrained(
+            pretrained, 
+            pad_token_id=self.tokenizer.pad_token_id
+        )
+        self.model.generation_config.do_sample = False
+        self.model.generation_config.repetition_penalty = 1.0
+        self.model.config.eos_token_id = self.eot_token_id
         mm_use_im_start_end = getattr(self.config, "mm_use_im_start_end", False)
         mm_use_im_patch_token = getattr(self.config, "mm_use_im_patch_token", True)
         if mm_use_im_patch_token:
@@ -76,8 +85,7 @@ class Med_MoE_Phi(lmms):
             self._tokenizer.add_tokens([DEFAULT_IM_START_TOKEN, DEFAULT_IM_END_TOKEN], special_tokens=True)
             self._tokenizer.add_tokens([DEFAULT_VID_START_TOKEN, DEFAULT_VID_END_TOKEN], special_tokens=True)
         self.model.resize_token_embeddings(len(self._tokenizer))
-        self.model.config.eos_token_id = self.eot_token_id
-
+        
         # Load the image processor
         image_tower = self.model.get_image_tower()
         if not image_tower.is_loaded:
@@ -85,7 +93,7 @@ class Med_MoE_Phi(lmms):
         image_tower.to(device=self._device, dtype=torch.float16)
         self._image_processor = image_tower.image_processor
 
-        self._conv_templates = conv_templates['phi']
+        self._conv_templates = conv_templates['qwen']
         self._max_length = self._config.max_position_embeddings
         self.model.eval()
         self.model.tie_weights()
@@ -100,6 +108,8 @@ class Med_MoE_Phi(lmms):
                 kwargs = {
                     "train_micro_batch_size_per_gpu": self.batch_size_per_gpu,
                     "train_batch_size": self.batch_size_per_gpu * accelerator.num_processes,
+                    "gradient_accumulation_steps": 1,
+                    "gradient_clipping": 1.0,
                 }
                 AcceleratorState().deepspeed_plugin.deepspeed_config_process(must_match=True, **kwargs)
                 eval_logger.info("Detected that you are using DistributedType.DEEPSPEED. Make sure you run `accelerate config` and set zero stage to 0")
@@ -241,20 +251,13 @@ class Med_MoE_Phi(lmms):
                 return_tensors='pt'
             ).unsqueeze(0).to(self.model.device)
 
-            if gen_kwargs.get("answer_type", None) == "closed":
-                stop_str = conv.sep if conv.sep_style != SeparatorStyle.TWO else conv.sep2
-                keywords = [stop_str]
-                stopping_criteria = KeywordsStoppingCriteria(keywords, self.tokenizer, input_ids)
-            else:
-                stopping_criteria = None
+            stop_str = conv.sep if conv.sep_style != SeparatorStyle.TWO else conv.sep2
+            keywords = [stop_str]
+            stopping_criteria = KeywordsStoppingCriteria(keywords, self.tokenizer, input_ids)
 
             # preconfigure gen_kwargs with defaults
             if "max_new_tokens" not in gen_kwargs:
                 gen_kwargs["max_new_tokens"] = 2048
-            if "temperature" not in gen_kwargs:
-                gen_kwargs["temperature"] = 0
-            if "top_p" not in gen_kwargs:
-                gen_kwargs["top_p"] = None
 
             pad_token_id = self.tokenizer.pad_token_id if self.tokenizer.pad_token_id is not None else self.eot_token_id
 
@@ -262,10 +265,9 @@ class Med_MoE_Phi(lmms):
                 input_ids,
                 images=image_tensor,
                 pad_token_id=pad_token_id,
-                do_sample=True if gen_kwargs["temperature"] > 0 else False,
-                temperature=gen_kwargs["temperature"],
+                do_sample=False,
                 max_new_tokens=gen_kwargs["max_new_tokens"],
-                stopping_criteria=[stopping_criteria] if stopping_criteria is not None else None
+                stopping_criteria=[stopping_criteria]
             )
 
             text_outputs = self.tokenizer.decode(cont[0, input_ids.shape[1]:], skip_special_tokens=True).strip()
