@@ -67,6 +67,16 @@ AVAILABLE_MODELS = {
     "videochat_flash": "VideoChat_Flash",
     "whisper": "Whisper",
     "whisper_vllm": "WhisperVllm",
+    "oryx": "Oryx",
+    "videochat2": "VideoChat2",
+    "llama_vision": "LlamaVision",
+    "aria": "Aria",
+    "ross": "Ross",
+    "med_moe_phi": "Med_MoE_Phi",
+    "med_moe_stablelm": "Med_MoE_StableLM",
+    "moe_llava_qwen": "MoE_Llava_Qwen",
+    "moe_llava_qwen_med": "MoE_Llava_Qwen_Med",
+    "adamllm_qwen_med": "AdaMLLM_Qwen_Med",
 }
 
 
