@@ -6,8 +6,8 @@ import argparse
 
 import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM
-from moellava.model import *
-from moellava.model.utils import auto_upgrade
+from lmms_eval.models.model_utils.moellava.model import *
+from lmms_eval.models.model_utils.moellava.model.utils import auto_upgrade
 
 
 def consolidate_ckpt(src_path, dst_path):
