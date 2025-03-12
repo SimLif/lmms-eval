@@ -17,34 +17,34 @@ import os
 import warnings
 import shutil
 
-from moellava.model.language_model.llava_qwen_moe import EvalMoELLaVAQWenForCausalLM
-from moellava.model.language_model.llava_qwen import LlavaQWenForCausalLM
+from lmms_eval.models.model_utils.moellava.model.language_model.llava_qwen_moe import EvalMoELLaVAQWenForCausalLM
+from lmms_eval.models.model_utils.moellava.model.language_model.llava_qwen import LlavaQWenForCausalLM
 
-from moellava.model.language_model.llava_llama_moe import EvalMoELLaVALlamaForCausalLM
-from moellava.model.language_model.llava_llama import LlavaLlamaForCausalLM
+from lmms_eval.models.model_utils.moellava.model.language_model.llava_llama_moe import EvalMoELLaVALlamaForCausalLM
+from lmms_eval.models.model_utils.moellava.model.language_model.llava_llama import LlavaLlamaForCausalLM
 
 import transformers
 a, b, c = transformers.__version__.split('.')[:3]
 if a == '4' and int(b) >= 34:
-    from moellava.model.language_model.llava_mistral_moe import EvalMoELLaVAMistralForCausalLM
-    from moellava.model.language_model.llava_mistral import LlavaMistralForCausalLM
+    from lmms_eval.models.model_utils.moellava.model.language_model.llava_mistral_moe import EvalMoELLaVAMistralForCausalLM
+    from lmms_eval.models.model_utils.moellava.model.language_model.llava_mistral import LlavaMistralForCausalLM
 if a == '4' and int(b) >= 36:
-    from moellava.model.language_model.llava_minicpm_moe import EvalMoELLaVAMiniCPMForCausalLM
-    from moellava.model.language_model.llava_minicpm import LlavaMiniCPMForCausalLM
-    from moellava.model.language_model.llava_phi_moe import EvalMoELLaVAPhiForCausalLM
-    from moellava.model.language_model.llava_phi import LlavaPhiForCausalLM
-    from moellava.model.language_model.llava_stablelm_moe import EvalMoELLaVAStablelmForCausalLM
-    from moellava.model.language_model.llava_stablelm import LlavaStablelmForCausalLM
+    from lmms_eval.models.model_utils.moellava.model.language_model.llava_minicpm_moe import EvalMoELLaVAMiniCPMForCausalLM
+    from lmms_eval.models.model_utils.moellava.model.language_model.llava_minicpm import LlavaMiniCPMForCausalLM
+    from lmms_eval.models.model_utils.moellava.model.language_model.llava_phi_moe import EvalMoELLaVAPhiForCausalLM
+    from lmms_eval.models.model_utils.moellava.model.language_model.llava_phi import LlavaPhiForCausalLM
+    from lmms_eval.models.model_utils.moellava.model.language_model.llava_stablelm_moe import EvalMoELLaVAStablelmForCausalLM
+    from lmms_eval.models.model_utils.moellava.model.language_model.llava_stablelm import LlavaStablelmForCausalLM
 if a == '4' and int(b) >= 37:
-    from moellava.model.language_model.llava_qwen1_5_moe import EvalMoELLaVAQwen1_5ForCausalLM
-    from moellava.model.language_model.llava_qwen1_5 import LlavaQwen1_5ForCausalLM
+    from lmms_eval.models.model_utils.moellava.model.language_model.llava_qwen1_5_moe import EvalMoELLaVAQwen1_5ForCausalLM
+    from lmms_eval.models.model_utils.moellava.model.language_model.llava_qwen1_5 import LlavaQwen1_5ForCausalLM
 
 from transformers import AutoTokenizer, AutoModelForCausalLM, AutoConfig, BitsAndBytesConfig, GenerationConfig
 import torch
-from moellava.model import *
-from moellava.constants import DEFAULT_IMAGE_PATCH_TOKEN, DEFAULT_IM_START_TOKEN, DEFAULT_IM_END_TOKEN, \
+from lmms_eval.models.model_utils.moellava.model import *
+from lmms_eval.models.model_utils.moellava.constants import DEFAULT_IMAGE_PATCH_TOKEN, DEFAULT_IM_START_TOKEN, DEFAULT_IM_END_TOKEN, \
     DEFAULT_VID_END_TOKEN, DEFAULT_VID_START_TOKEN, DEFAULT_VIDEO_PATCH_TOKEN
-from moellava.model.language_model.qwen.tokenization_qwen import QWenTokenizer
+from lmms_eval.models.model_utils.moellava.model.language_model.qwen.tokenization_qwen import QWenTokenizer
 
 
 def load_pretrained_model(model_path, model_base, model_name, load_8bit=False, load_4bit=False, device_map="auto",
@@ -159,7 +159,7 @@ def load_pretrained_model(model_path, model_base, model_name, load_8bit=False, l
                 model = EvalMoELLaVAMiniCPMForCausalLM.from_pretrained(model_path, low_cpu_mem_usage=True, config=lora_cfg_pretrained, **kwargs)
                 model.config.eos_token_id = tokenizer.eos_token_id
             elif 'stablelm' in model_name.lower():
-                from moellava.model.language_model.stablelm.tokenization_arcade100k import Arcade100kTokenizer
+                from lmms_eval.models.model_utils.moellava.model.language_model.stablelm.tokenization_arcade100k import Arcade100kTokenizer
                 tokenizer = Arcade100kTokenizer.from_pretrained(model_path, use_fast=False, padding_side=padding_side)
                 model = EvalMoELLaVAStablelmForCausalLM.from_pretrained(model_path, low_cpu_mem_usage=True, config=lora_cfg_pretrained, **kwargs)
                 model.config.eos_token_id = tokenizer.eos_token_id
@@ -254,8 +254,8 @@ def load_pretrained_model(model_path, model_base, model_name, load_8bit=False, l
                     model = LlavaMiniCPMForCausalLM.from_pretrained(model_base, low_cpu_mem_usage=True, config=cfg_pretrained, **kwargs)
                 model.config.eos_token_id = tokenizer.eos_token_id
             elif 'stablelm' in model_name.lower():
-                from moellava.model.language_model.stablelm.tokenization_arcade100k import Arcade100kTokenizer
-                from moellava.model.language_model.stablelm.configuration_stablelm_epoch import StableLMEpochConfig
+                from lmms_eval.models.model_utils.moellava.model.language_model.stablelm.tokenization_arcade100k import Arcade100kTokenizer
+                from lmms_eval.models.model_utils.moellava.model.language_model.stablelm.configuration_stablelm_epoch import StableLMEpochConfig
                 tokenizer = Arcade100kTokenizer.from_pretrained(model_base, use_fast=False, padding_side=padding_side)
                 cfg_pretrained = StableLMEpochConfig.from_pretrained(model_path)
                 if getattr(cfg_pretrained, 'moe', {}).get('moe_enable', False):
@@ -416,7 +416,7 @@ def load_pretrained_model(model_path, model_base, model_name, load_8bit=False, l
                     model = LlavaMiniCPMForCausalLM.from_pretrained(model_path, low_cpu_mem_usage=True, **kwargs)
                 model.config.eos_token_id = tokenizer.eos_token_id
             elif 'stablelm' in model_name.lower():
-                from moellava.model.language_model.stablelm.tokenization_arcade100k import Arcade100kTokenizer
+                from lmms_eval.models.model_utils.moellava.model.language_model.stablelm.tokenization_arcade100k import Arcade100kTokenizer
                 tokenizer = Arcade100kTokenizer.from_pretrained(model_path, use_fast=False, padding_side=padding_side)
                 # print(tokenizer)
                 if 'moe' in model_name.lower():

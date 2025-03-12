@@ -4,7 +4,7 @@ import base64
 
 import torch
 from transformers import StoppingCriteria
-from moellava.constants import IMAGE_TOKEN_INDEX
+from lmms_eval.models.model_utils.moellava.constants import IMAGE_TOKEN_INDEX
 
 
 def load_image_from_base64(image):

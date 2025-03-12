@@ -24,7 +24,7 @@ from transformers import AutoConfig, AutoModelForCausalLM
 from transformers.modeling_outputs import CausalLMOutputWithPast
 
 from .mpt.modeling_mpt import MPTConfig, MPTForCausalLM, MPTModel
-from moellava.model.llava_arch import LlavaMetaModel, LlavaMetaForCausalLM
+from lmms_eval.models.model_utils.moellava.model.llava_arch import LlavaMetaModel, LlavaMetaForCausalLM
 
 
 class LlavaMPTConfig(MPTConfig):
