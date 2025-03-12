@@ -5,6 +5,7 @@ MODEL="med_moe_phi"
 MODEL_SUFFIX=""  # 默认为空
 TASKS="vqa_rad"
 GPU_ID=0
+PORT=29500
 
 # 解析命令行参数
 while [[ $# -gt 0 ]]; do
@@ -25,6 +26,10 @@ while [[ $# -gt 0 ]]; do
       GPU_ID="$2"
       shift 2
       ;;
+    --port)
+      PORT="$2"
+      shift 2
+      ;;
     *)
       echo "未知参数: $1"
       exit 1
@@ -33,10 +38,19 @@ while [[ $# -gt 0 ]]; do
 done
 
 MODEL_DIR="/mnt/data/haoqiang/workspace/models"
+CKPT_DIR="/mnt/data/haoqiang/workspace/05-moe-llava/checkpoints"
 # 模型路径映射字典
 declare -A MODEL_PATHS
 MODEL_PATHS["med_moe_phi"]="$MODEL_DIR/Med-MoE/stage3/llavaphi-2.7b-medmoe"
 MODEL_PATHS["med_moe_stablelm"]="$MODEL_DIR/Med-MoE/stage3/llavastablelm-1.6b-medmoe"
+MODEL_PATHS["moe_llava_qwen"]="$MODEL_DIR/moe-llava-qwen-1.8b-4e"
+MODEL_PATHS["moe_llava_qwen_med_1epoch"]="$CKPT_DIR/moe-llava-qwen-1.8b-4e-1epoch"
+MODEL_PATHS["moe_llava_qwen_med_9epoch"]="$CKPT_DIR/moe-llava-qwen-1.8b-4e-9epoch"
+MODEL_PATHS["moe_llava_qwen_med_s2_1epoch"]="$CKPT_DIR/moe-llava-qwen-1.8b-4e-s2-1epoch"
+MODEL_PATHS["moe_llava_qwen_med_s2_9epoch"]="$CKPT_DIR/moe-llava-qwen-1.8b-4e-s2-9epoch"
+MODEL_PATHS["moe_llava_qwen_med_s2_k_9epoch"]="$CKPT_DIR/moe-llava-qwen-1.8b-4e-s2-k-9epoch"
+MODEL_PATHS["qwen2_vl_instruct"]="$MODEL_DIR/qwen2-vl-2b-instruct"
+MODEL_PATHS["qwen2_vl_adamllm"]="$MODEL_DIR/biomed-qwen2-vl-2b-instruct"
 # 可以继续添加更多映射...
 
 # 构建完整的模型标识符，处理MODEL_SUFFIX为空的情况
@@ -67,11 +81,13 @@ echo "模型路径: $MODEL_PATH"
 echo "评估任务: $TASKS"
 echo "使用GPU: $GPU_ID"
 
+cd ~/workspace/02-lmms-eval
 # 执行评估命令
 CUDA_VISIBLE_DEVICES=$GPU_ID python3 -m accelerate.commands.launch \
     --num_processes=1 \
     --use_deepspeed \
     --zero_stage 0 \
+    --main_process_port $PORT \
     -m lmms_eval \
     --model $MODEL \
     --model_args pretrained="$MODEL_PATH" \

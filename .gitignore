@@ -19,7 +19,7 @@ temp
 profile_default/
 ipython_config.py
 logs/
-scripts/
+# scripts/
 wandb/
 SimSun.ttf
 submissions/
