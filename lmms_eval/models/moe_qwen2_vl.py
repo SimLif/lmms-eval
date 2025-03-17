@@ -16,6 +16,7 @@ from lmms_eval.api.instance import Instance
 from lmms_eval.api.model import lmms
 from lmms_eval.api.registry import register_model
 from lmms_eval.models.model_utils.load_video import load_video_decord
+from lmms_eval.models.model_utils.moellava.model.multimodal_model.qwen2_vl_moe import EvalMoEQwen2VLForConditionalGeneration
 
 try:
     from qwen_vl_utils import process_vision_info
@@ -23,8 +24,8 @@ except ImportError:
     eval_logger.warning("Failed to import qwen_vl_utils; Please install it via `pip install qwen-vl-utils`")
 
 
-@register_model("qwen2_vl")
-class Qwen2_VL(lmms):
+@register_model("moe_qwen2_vl")
+class MoE_Qwen2_VL(lmms):
     """
     Qwen2_VL Model
     "https://github.com/QwenLM/Qwen2-VL"
@@ -59,14 +60,9 @@ class Qwen2_VL(lmms):
             self.device_map = f"cuda:{accelerator.local_process_index}"
 
         if use_flash_attention_2:
-            self._model = Qwen2VLForConditionalGeneration.from_pretrained(
-                pretrained,
-                torch_dtype="auto",
-                device_map=self.device_map,
-                attn_implementation="flash_attention_2",
-            ).eval()
+            raise NotImplementedError("Flash Attention 2 is not implemented for MoE_Qwen2_VL")
         else:
-            self._model = Qwen2VLForConditionalGeneration.from_pretrained(pretrained, torch_dtype="auto", device_map=self.device_map).eval()
+            self._model = EvalMoEQwen2VLForConditionalGeneration.from_pretrained(pretrained, torch_dtype="auto", device_map=self.device_map).eval()
         self.processor = AutoProcessor.from_pretrained(pretrained, max_pixels=max_pixels, min_pixels=min_pixels)
         self.max_pixels = max_pixels
         self.min_pixels = min_pixels
