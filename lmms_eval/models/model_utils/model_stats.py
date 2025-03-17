@@ -2,7 +2,7 @@ import argparse
 
 from lmms_eval.models import get_model
 
-def count_parameters_in_billions(model, count_moe_activated_only=False, top_k=None):
+def moe_count_parameters_in_billions(model, count_moe_activated_only=False, top_k=None):
     """
     统计模型的参数量，并以十亿(Billion)为单位返回
     
@@ -72,6 +72,16 @@ def count_parameters_in_billions(model, count_moe_activated_only=False, top_k=No
                 # 计算所有专家的参数
                 total_params += total_layer_params
     
+    print(f'Params per expert: {params_per_expert/1e6:.2f}M')
+    
+    return total_params / 1e9  # 转换为十亿单位
+
+
+def count_parameters_in_billions(model):
+    """
+    统计模型的参数量，并以十亿(Billion)为单位返回
+    """
+    total_params = sum(p.numel() for p in model.parameters())
     return total_params / 1e9  # 转换为十亿单位
 
 # 使用示例
@@ -99,19 +109,33 @@ def print_model_parameters(model):
 
 model_name = 'med_moe_phi'
 
+argparser = argparse.ArgumentParser()
+argparser.add_argument('--model', type=str, default=model_name)
+argparser.add_argument('--model_path', type=str, default=None)
+argparser.add_argument('--moe', action='store_false', default=True)
+args = argparser.parse_args()
+model_name = args.model
+
 # get_model(model_name)
 
-model = get_model(model_name)().model
-# print_model_parameters(model)
-# 计算所有参数（包括所有专家）
-total_params = count_parameters_in_billions(model)
-print(f"Total parameters: {total_params:.2f}B")
-# 计算前向传播中实际激活的参数
-activated_params = count_parameters_in_billions(model, count_moe_activated_only=True, top_k=2)  # 假设top_k=2
-print(f"Activated parameters: {activated_params:.2f}B")
-# 计算图像塔的参数
-image_tower_params = count_image_tower_parameters_in_billions(model)
-print(f"Image tower parameters: {image_tower_params:.2f}B")
+if args.model_path is not None:
+    model = get_model(model_name)(args.model_path).model
+else:
+    model = get_model(model_name)().model
+
+
+if args.moe:
+    # 计算所有参数（包括所有专家）
+    total_params = moe_count_parameters_in_billions(model)
+    print(f"Total parameters: {total_params:.2f}B")
+    # 计算前向传播中实际激活的参数
+    activated_params = moe_count_parameters_in_billions(model, count_moe_activated_only=True, top_k=2)  # 假设top_k=2
+    print(f"Activated parameters: {activated_params:.2f}B")
+    # 计算图像塔的参数
+    image_tower_params = count_image_tower_parameters_in_billions(model)
+    print(f"Image tower parameters: {image_tower_params:.2f}B")
+else:
+    print_model_parameters(model) 
 
 
 
