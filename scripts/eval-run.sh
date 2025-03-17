@@ -10,5 +10,6 @@
 
 
 # conda activate lmms-eval-twin
-bash eval.sh --model qwen2_vl --model_suffix instruct --tasks medmoe_vqa --gpu 0
+# bash eval.sh --model qwen2_vl --model_suffix instruct --tasks medmoe_vqa --gpu 0
 # bash eval.sh --model qwen2_vl_adamllm --tasks medmoe_vqa --gpu 0
+bash eval.sh --model moe_qwen2_vl --model_suffix test --tasks medmoe_vqa --gpu 0 --port 29504

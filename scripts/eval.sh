@@ -51,6 +51,7 @@ MODEL_PATHS["moe_llava_qwen_med_s2_9epoch"]="$CKPT_DIR/moe-llava-qwen-1.8b-4e-s2
 MODEL_PATHS["moe_llava_qwen_med_s2_k_9epoch"]="$CKPT_DIR/moe-llava-qwen-1.8b-4e-s2-k-9epoch"
 MODEL_PATHS["qwen2_vl_instruct"]="$MODEL_DIR/qwen2-vl-2b-instruct"
 MODEL_PATHS["qwen2_vl_adamllm"]="$MODEL_DIR/biomed-qwen2-vl-2b-instruct"
+MODEL_PATHS["moe_qwen2_vl_test"]="$CKPT_DIR/qwen2-vl-2b-instruct-4e-med-test"
 # 可以继续添加更多映射...
 
 # 构建完整的模型标识符，处理MODEL_SUFFIX为空的情况
@@ -90,7 +91,7 @@ CUDA_VISIBLE_DEVICES=$GPU_ID python3 -m accelerate.commands.launch \
     --main_process_port $PORT \
     -m lmms_eval \
     --model $MODEL \
-    --model_args pretrained="$MODEL_PATH" \
+    --model_args pretrained=$MODEL_PATH,max_pixels=$((576 * 28 * 28)),min_pixels=$((16 * 28 * 28)) \
     --tasks $TASKS \
     --batch_size 1 \
     --log_samples \
