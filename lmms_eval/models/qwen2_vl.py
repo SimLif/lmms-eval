@@ -294,3 +294,33 @@ class Qwen2_VL(lmms):
 
     def generate_until_multi_round(self, requests) -> List[str]:
         raise NotImplementedError("TODO: Implement multi-round generation")
+
+
+
+def count_parameters_in_billions(model):
+    """
+    统计模型的参数量，并以十亿(Billion)为单位返回
+    """
+    total_params = sum(p.numel() for p in model.parameters())
+    return total_params / 1e9  # 转换为十亿单位
+
+def count_visual_parameters_in_billions(model):
+    """
+    统计模型的视觉参数量，并以十亿(Billion)为单位返回
+    """
+    total_params = 0
+    for name, param in model.named_parameters():
+        if "visual" in name:
+            total_params += param.numel()
+    return total_params / 1e9  # 转换为十亿单位
+
+# 使用示例
+def print_model_size(model):
+    param_count_billions = count_parameters_in_billions(model)
+    print(f"模型参数量: {param_count_billions:.2f}B")
+    visual_param_count_billions = count_visual_parameters_in_billions(model)
+    print(f"视觉参数量: {visual_param_count_billions:.2f}B")
+
+
+# model = Qwen2VLForConditionalGeneration.from_pretrained("/mnt/data/haoqiang/workspace/models/qwen2-vl-2b-instruct")
+# print_model_size(model)
