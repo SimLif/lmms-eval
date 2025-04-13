@@ -235,8 +235,8 @@ class SimilarityGate(nn.Module):
         scores2 = torch.einsum('bhd,ed->bhe', query2, self.sub_keys2.float())  # [batch_tokens, num_heads, sqrt_experts]
 
         # 从两个子键集各获取k个最高分
-        top_scores1, top_indices1 = torch.topk(scores1, k=self.k, dim=-1)  # [batch_tokens, num_heads, k]
-        top_scores2, top_indices2 = torch.topk(scores2, k=self.k, dim=-1)  # [batch_tokens, num_heads, k]
+        top_scores1, top_indices1 = torch.topk(scores1, k=min(self.k, self.sqrt_experts), dim=-1)  # [batch_tokens, num_heads, k]
+        top_scores2, top_indices2 = torch.topk(scores2, k=min(self.k, self.sqrt_experts), dim=-1)  # [batch_tokens, num_heads, k]
 
         # 计算所有k²个可能组合的分数
         combined_scores = top_scores1.unsqueeze(-1) + top_scores2.unsqueeze(-2)  # [batch_tokens, num_heads, k, k]
@@ -246,8 +246,8 @@ class SimilarityGate(nn.Module):
         top_k_scores, top_k_indices = torch.topk(flat_scores, k=self.k, dim=-1)  # [batch_tokens, num_heads, k]
 
         # 计算原始k*k网格中的行列索引
-        i1_indices = top_k_indices // self.k  # 获取行索引 [batch_tokens, num_heads, k]
-        i2_indices = top_k_indices % self.k   # 获取列索引 [batch_tokens, num_heads, k]
+        i1_indices = top_k_indices // min(self.k, self.sqrt_experts)  # 获取行索引 [batch_tokens, num_heads, k]
+        i2_indices = top_k_indices % min(self.k, self.sqrt_experts)   # 获取列索引 [batch_tokens, num_heads, k]
 
         # 使用这些索引获取实际的子键索引
         selected_i1 = torch.gather(top_indices1, dim=2, index=i1_indices)  # [batch_tokens, num_heads, k]
@@ -456,6 +456,8 @@ class EmbeddedExpertsMoE(nn.Module):
         dropout: float = 0.0,        # Dropout率
         init_scale: float = 1.0,     # 初始化缩放
         expert_parallel: bool = False, # 是否并行化专家
+        use_expert_gate: bool = False, # 是否启用针对每个专家的 gate 模块
+        forward_mode: str = "batched", # 前向传播模式
         ep_group: Optional[torch.distributed.ProcessGroup] = None,
     ):
         super().__init__()
@@ -467,15 +469,9 @@ class EmbeddedExpertsMoE(nn.Module):
         self.gate_type = gate_type
         self.use_residual = use_residual
         self.expert_parallel = expert_parallel
+        self.use_expert_gate = use_expert_gate
+        self.forward_mode = forward_mode
         self.ep_group = ep_group
-        
-        # 确保num_experts是完全平方数
-        sqrt_experts = math.sqrt(num_experts)
-        if sqrt_experts != int(sqrt_experts):
-            new_sqrt = math.ceil(sqrt_experts)
-            num_experts = new_sqrt ** 2
-            logger.warning(f"调整专家数量为最接近的完全平方数: {num_experts}")
-            self.num_experts = num_experts
         
         # 专家选择门控网络
         if gate_type == "token_gating":
@@ -490,6 +486,14 @@ class EmbeddedExpertsMoE(nn.Module):
                 ep_group=ep_group,
             )
         elif gate_type == "similarity_gating":
+            # 确保 num_experts 是完全平方数，否则调整到最近的完全平方数
+            sqrt_experts = math.sqrt(num_experts)
+            if sqrt_experts != int(sqrt_experts):
+                new_sqrt = math.ceil(sqrt_experts)
+                num_experts = new_sqrt ** 2
+                logger.warning(f"调整专家数量为最接近的完全平方数: {num_experts}")
+                self.num_experts = num_experts
+
             self.gate = SimilarityGate(
                 model_dim=hidden_size,
                 num_experts=num_experts,
@@ -508,71 +512,71 @@ class EmbeddedExpertsMoE(nn.Module):
         # 嵌入式专家参数
         self.expert_down = nn.Embedding(num_experts, hidden_size * expert_dim)
         self.expert_up = nn.Embedding(num_experts, expert_dim * hidden_size)
+        if self.use_expert_gate:
+            self.expert_gate = nn.Embedding(num_experts, hidden_size * expert_dim)
         
         # 设置激活函数
         if act_fn == "relu":
             self.activation = F.relu
         elif act_fn == "gelu":
             self.activation = F.gelu
-        elif act_fn == "silu" or act_fn == "swish":
+        elif act_fn in ["silu", "swish"]:
             self.activation = F.silu
         else:
             raise ValueError(f"不支持的激活函数: {act_fn}")
         
-        # Dropout层
         self.dropout = nn.Dropout(dropout)
         
-        # 可选的残差系数
         if use_residual:
             self.coefficient = nn.Linear(hidden_size, 2)
         
         # 初始化参数
         with torch.no_grad():
             # 使用高斯初始化下投影权重
-            std = math.sqrt(2.0 / (hidden_size + expert_dim)) * init_scale
-            nn.init.normal_(self.expert_down.weight, mean=0.0, std=std)
+            std_down = math.sqrt(2.0 / (hidden_size + expert_dim)) * init_scale
+            nn.init.normal_(self.expert_down.weight, mean=0.0, std=std_down)
             
             # 使用高斯初始化上投影权重
-            std = math.sqrt(1.0 / hidden_size) * init_scale
-            nn.init.normal_(self.expert_up.weight, mean=0.0, std=std)
+            std_up = math.sqrt(1.0 / hidden_size) * init_scale
+            nn.init.normal_(self.expert_up.weight, mean=0.0, std=std_up)
     
     def forward(self, hidden_states: torch.Tensor, used_token: Optional[torch.Tensor] = None) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """MoE前向传播
         
         参数:
-            hidden_states: 形状为[batch_size, seq_len, hidden_size]的输入
-            used_token: 可选的掩码指示有效token
+            hidden_states: 形状为 [batch_size, seq_len, hidden_size] 的输入
+            used_token: 可选的掩码指示有效 token
             
         返回:
-            output: 模型输出
+            outputs: 模型输出
             l_aux: 负载均衡损失
             exp_counts: 专家计数
         """
-        # 保存原始形状和设备
         original_shape = hidden_states.shape
         batch_size, seq_len, hidden_size = original_shape
         device = hidden_states.device
         input_dtype = hidden_states.dtype
 
         # 扁平化输入
-        hidden_states = hidden_states.reshape(-1, hidden_size)  # [batch*seq, hidden]
+        hidden_states = hidden_states.reshape(-1, hidden_size)  # [N, hidden_size], N = batch_size * seq_len
         orig_hidden = hidden_states.clone()
         batch_tokens = hidden_states.shape[0]
 
-        # 获取专家路由信息
+        # 根据不同的门控获取路由信息
         if self.gate_type == "token_gating":
-            l_aux, combine_weights, dispatch_mask, exp_counts = self.gate(hidden_states, used_token)
+            l_aux, combine_weights, dispatch_mask, exp_counts = self.gate(hidden_states, used_token) # [N, num_experts, capacity]
         elif self.gate_type == "similarity_gating":
-            l_aux, combine_weights, dispatch_mask, exp_counts, expert_indices = self.gate(hidden_states, used_token)
+            l_aux, combine_weights, dispatch_mask, exp_counts, expert_indices = self.gate(hidden_states, used_token) # [N, topk, capacity], [N, expert_indices]
         combine_weights = combine_weights.to(dtype=input_dtype)
-        
-        # 计算专家输出
+
+        # 初始化输出
         outputs = torch.zeros((batch_tokens, hidden_size), device=device, dtype=hidden_states.dtype)
-                
-        # 使用选定的专家处理每个token
-        active_positions = torch.nonzero(dispatch_mask)
-        if len(active_positions) > 0:  # 确保有选定的专家
-            # 提取活跃位置的索引
+        
+        # 找到 dispatch_mask 中非零的位置（即被激活的 token）
+        active_positions = torch.nonzero(dispatch_mask)  # shape: [num_active, 3], 0th col: token index, 1st col: expert index, 2nd col: capacity index
+        
+        if active_positions.numel() > 0:
+            # 提取各个维度：第一列为 token 索引，第三列为 capacity 索引
             token_indices = active_positions[:, 0]
             capacity_indices = active_positions[:, 2]
             
@@ -580,53 +584,105 @@ class EmbeddedExpertsMoE(nn.Module):
                 expert_indices_from_mask = active_positions[:, 1]
             elif self.gate_type == "similarity_gating":
                 candidate_indices = active_positions[:, 1]
+                # 这里根据 gate 返回的 expert_indices，结合 candidate 索引提取真正的专家索引
                 expert_indices_from_mask = expert_indices[token_indices, candidate_indices]
 
-            # 获取对应token的隐藏状态
-            flat_hidden = hidden_states[token_indices]
-            
-            # 获取专家参数 - 使用从dispatch_mask获取的专家索引
-            expert_down_w = self.expert_down(expert_indices_from_mask)  # [active_tokens, hidden*expert_dim]
-            expert_up_w = self.expert_up(expert_indices_from_mask)  # [active_tokens, expert_dim*hidden]
-            
-            # 重塑为矩阵形式
-            expert_down_w = expert_down_w.view(-1, hidden_size, self.expert_dim)
-            expert_up_w = expert_up_w.view(-1, self.expert_dim, hidden_size)
-            
-            # 计算中间激活
-            intermediate = torch.bmm(flat_hidden.unsqueeze(1), expert_down_w).squeeze(1)
-            intermediate = self.activation(intermediate)
-            intermediate = self.dropout(intermediate)
-            
-            # 计算输出
-            expert_outputs = torch.bmm(intermediate.unsqueeze(1), expert_up_w).squeeze(1)
-            
-            # 获取组合权重 - 使用活跃位置直接索引combine_weights
+            if self.forward_mode == "batched":
+                # 获取对应token的隐藏状态
+                flat_hidden = hidden_states[token_indices]
+                
+                # 获取专家参数 - 使用从dispatch_mask获取的专家索引
+                expert_down_w = self.expert_down(expert_indices_from_mask)  # [active_tokens, hidden*expert_dim]
+                expert_up_w = self.expert_up(expert_indices_from_mask)  # [active_tokens, expert_dim*hidden]
+                
+                # 重塑为矩阵形式
+                expert_down_w = expert_down_w.view(-1, hidden_size, self.expert_dim)
+                expert_up_w = expert_up_w.view(-1, self.expert_dim, hidden_size)
+                
+                # 计算中间激活
+                intermediate = torch.bmm(flat_hidden.unsqueeze(1), expert_down_w).squeeze(1)
+                if self.use_expert_gate:
+                    expert_gate_w = self.expert_gate(expert_indices_from_mask)
+                    expert_gate_w = expert_gate_w.view(-1, hidden_size, self.expert_dim)
+                    gate_value = torch.bmm(flat_hidden.unsqueeze(1), expert_gate_w).squeeze(1)
+                    gate_value = self.activation(gate_value)
+                    intermediate = intermediate * gate_value
+                else:
+                    intermediate = self.activation(intermediate)
+                    intermediate = self.dropout(intermediate)
+                
+                # 计算输出
+                expert_outputs = torch.bmm(intermediate.unsqueeze(1), expert_up_w).squeeze(1)
+                
+                # 根据 combine_weights 获得组合权重
+                if self.gate_type == "token_gating":
+                    flat_weights = combine_weights[token_indices, expert_indices_from_mask, capacity_indices].unsqueeze(1)
+                elif self.gate_type == "similarity_gating":
+                    flat_weights = combine_weights[token_indices, candidate_indices, capacity_indices].unsqueeze(1)
+                
+                # 加权叠加专家输出到对应 token 上
+                token_indices_expanded = token_indices.unsqueeze(1).expand(-1, hidden_size)
+                weighted_outputs = flat_weights * expert_outputs
+                outputs.scatter_add_(0, token_indices_expanded, weighted_outputs)
 
-            if self.gate_type == "token_gating":
-                flat_weights = combine_weights[token_indices, expert_indices_from_mask, capacity_indices].unsqueeze(1)
-            elif self.gate_type == "similarity_gating":
-                flat_weights = combine_weights[token_indices, candidate_indices, capacity_indices].unsqueeze(1) 
-            
-            # 准备用于scatter_add的索引
-            token_indices_expanded = token_indices.unsqueeze(1).expand(-1, hidden_size)
-            weighted_outputs = flat_weights * expert_outputs
-            
-            # 使用scatter_add累加输出
-            outputs.scatter_add_(0, token_indices_expanded, weighted_outputs)
+            elif self.forward_mode == "grouped":            
+                # 利用 unique 对激活 token 按照专家分组，减少重复的 embedding 查找和矩阵计算
+                unique_experts, inverse_indices = torch.unique(expert_indices_from_mask, return_inverse=True)
+                # 对每个唯一的 expert 分组计算
+                for i, expert in enumerate(unique_experts):
+                    exp_id = int(expert.item())
+                    # 找出分组内对应的 token 在扁平化输入中的下标
+                    group_mask = (inverse_indices == i)
+                    group_token_indices = token_indices[group_mask]  # token的全局索引
+                    group_capacity_indices = capacity_indices[group_mask]
+                    
+                    # 取出这部分 tokens 的 hidden 表示，形状 [group_size, hidden_size]
+                    tokens_group = hidden_states[group_token_indices]
+                    
+                    # 查找当前 expert 的 down/up（及可选 gate）参数，并重塑为矩阵形式
+                    expert_down_weight = self.expert_down.weight[exp_id].view(hidden_size, self.expert_dim)
+                    expert_up_weight = self.expert_up.weight[exp_id].view(self.expert_dim, hidden_size)
+
+                    # 下投影计算：tokens_group @ expert_down_weight，得到中间激活
+                    intermediate = tokens_group.matmul(expert_down_weight)  # [G, expert_dim]
+                    
+                    if self.use_expert_gate:
+                        expert_gate_weight = self.expert_gate.weight[exp_id].view(hidden_size, self.expert_dim)
+                        gate_value = tokens_group.matmul(expert_gate_weight)  # [G, expert_dim]
+                        gate_value = self.activation(gate_value)
+                        intermediate = intermediate * gate_value
+                    else:
+                        intermediate = self.activation(intermediate)
+                        intermediate = self.dropout(intermediate)
+                    
+                    # 上投影计算
+                    expert_output = intermediate.matmul(expert_up_weight)  # [G, hidden_size]
+
+                    # 根据不同的门控获取每个 token 特有的组合权重
+                    if self.gate_type == "token_gating":
+                        # combine_weights 的形状为 [B*T, num_experts, capacity]
+                        group_combine_weights = combine_weights[group_token_indices, exp_id, group_capacity_indices].unsqueeze(1)
+                    elif self.gate_type == "similarity_gating":
+                        group_candidate_indices = candidate_indices[group_mask]
+                        group_combine_weights = combine_weights[group_token_indices, group_candidate_indices, group_capacity_indices].unsqueeze(1)
+                    
+                    weighted_output = expert_output * group_combine_weights  # [G, hidden_size]
+                    
+                    # 将当前 expert 组的输出累加回输出 tensor
+                    outputs[group_token_indices] += weighted_output
         
+        # 对于未经过 MoE 调度的 token，则保留原始表示
         processed_mask = torch.zeros(batch_tokens, dtype=torch.bool, device=device)
-        if len(active_positions) > 0:
+        if active_positions.numel() > 0:
             processed_mask[token_indices] = True
-        unprocessed_mask = ~processed_mask  # 未处理 token 的 mask
+        unprocessed_mask = ~processed_mask
         outputs[unprocessed_mask] = orig_hidden[unprocessed_mask]
 
-        # 重塑回原始形状
+        # 恢复原始形状
         outputs = outputs.reshape(original_shape)
         
-        # 如果使用残差连接
+        # 如果使用残差连接，则融合处理前后的信息
         if self.use_residual:
-            # 通过标准MLP计算残差
             coef = self.coefficient(hidden_states.reshape(original_shape))
             coef = F.softmax(coef, dim=-1)
             outputs = outputs * coef[..., 0:1] + hidden_states.reshape(original_shape) * coef[..., 1:]
@@ -654,6 +710,8 @@ class EmbeddedMoELayer(nn.Module):
         act_fn: str = "silu",
         dropout: float = 0.0,
         init_scale: float = 1.0,
+        use_expert_gate: bool = False,
+        forward_mode: str = "batched",
         norm_type: str = "layernorm",
         use_norm: bool = False,
         use_pre_norm: bool = True,
@@ -692,6 +750,8 @@ class EmbeddedMoELayer(nn.Module):
             act_fn=act_fn,
             dropout=dropout,
             init_scale=init_scale,
+            use_expert_gate=use_expert_gate,
+            forward_mode=forward_mode,
         )
     
     def forward(self, hidden_states: torch.Tensor, used_token: Optional[torch.Tensor] = None) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -718,6 +778,209 @@ class EmbeddedMoELayer(nn.Module):
         else:
             output, l_aux, exp_counts = self.moe(hidden_states, used_token)
 
+        return output, l_aux, exp_counts
+
+
+class DenseMaskMoE(nn.Module):
+    """
+    Dense Mask Mixture-of-Experts (MoE) 层基于 dense 运算 + mask 实现。
+
+    工作流程：
+      1. 使用 TopKGate 对输入进行专家路由，返回 (l_aux, combine_weights, dispatch_mask, exp_counts)。
+      2. 对 combine_weights（形状 [N, num_experts, capacity]）在 capacity 维度求和，
+         得到每个 token 对各专家的组合权重（形状 [N, num_experts]）。
+      3. 将所有专家的下投影权重融合成一个大矩阵，对输入执行一次 dense 运算，然后 reshape 得到各专家中间输出。
+      4. 应用激活和 dropout（或可选的专家门控）。
+      5. 利用 einsum 对各专家输出分别进行上投影，再用 combine_dense 加权求和，
+         生成最终 token 表示。
+    """
+    def __init__(
+        self,
+        hidden_size: int,
+        expert_dim: int,
+        num_experts: int,
+        k: int,
+        capacity_factor: float = 1.0,
+        eval_capacity_factor: float = 1.0,
+        min_capacity: int = 8,
+        dropout: float = 0.0,
+        activation: str = "silu",
+        use_expert_gate: bool = False
+    ):
+        """
+        Args:
+            hidden_size (int): 输入及输出的维度。
+            expert_dim (int): 每个专家的内部中间激活维度。
+            num_experts (int): 专家数量。
+            k (int): 每个 token 选择的 top-k 专家数。
+            capacity_factor (float): TopKGate 的 capacity_factor 参数。
+            eval_capacity_factor (float): TopKGate 的 eval_capacity_factor 参数。
+            min_capacity (int): TopKGate 的最小 capacity 参数。
+            dropout (float): dropout 概率。
+            activation (str): 激活函数类型，可选 "silu", "relu", "gelu"。
+            use_expert_gate (bool): 是否使用额外的专家门控参数。
+        """
+        super().__init__()
+        self.hidden_size = hidden_size
+        self.expert_dim = expert_dim
+        self.num_experts = num_experts
+        self.k = k
+        self.use_expert_gate = use_expert_gate
+
+        # 使用 deepspeed 的 TopKGate 进行专家路由
+        self.gate = TopKGate(
+            model_dim=hidden_size,
+            num_experts=num_experts,
+            k=k,
+            capacity_factor=capacity_factor,
+            eval_capacity_factor=eval_capacity_factor,
+            min_capacity=min_capacity,
+            drop_tokens=True,
+        )
+
+        self.dropout = nn.Dropout(dropout)
+        
+        # 选择激活函数
+        if activation == "silu":
+            self.activation = F.silu
+        elif activation == "relu":
+            self.activation = F.relu
+        elif activation == "gelu":
+            self.activation = F.gelu
+        else:
+            raise ValueError(f"Unsupported activation: {activation}")
+
+        # 用 nn.Embedding 存储下投影参数，每个专家的参数 shape: [hidden_size * expert_dim]
+        self.expert_down = nn.Embedding(num_experts, hidden_size * expert_dim)
+        # 初始化并乘上合适的缩放因子
+        nn.init.normal_(self.expert_down.weight, std=math.sqrt(2.0 / (hidden_size + expert_dim)))
+        
+        # 上投影参数，每个专家的参数 shape: [expert_dim * hidden_size]
+        self.expert_up = nn.Embedding(num_experts, expert_dim * hidden_size)
+        nn.init.normal_(self.expert_up.weight, std=math.sqrt(1.0 / hidden_size))
+        
+        # 可选：专家内部门控参数，存储形状: [hidden_size * expert_dim]
+        if self.use_expert_gate:
+            self.expert_gate = nn.Embedding(num_experts, hidden_size * expert_dim)
+            nn.init.normal_(self.expert_gate.weight, std=math.sqrt(2.0 / (hidden_size + expert_dim)))
+
+
+    def count_expert_cooccurrence(self, combine_dense: torch.Tensor) -> torch.Tensor:
+        """
+        统计专家的共现情况。
+        
+        Args:
+            combine_dense (torch.Tensor): 形状为 [N, num_experts] 的张量，
+                每个 token 对各专家的激活权重（或者标志），非零表示激活。
+        
+        Returns:
+            co_occurrence_upper (torch.Tensor): 上三角的共现矩阵，形状为 [num_experts, num_experts]，
+                即 co_occurrence_upper[i, j] 表示专家 i 和专家 j 同时被激活的 token 数量（仅计算 i<j 部分）。
+        """
+        # 将 combine_dense 二值化（假定激活权重大于 0 表示激活）
+        # 如果 combine_dense 原本就是 0/1，则这个步骤可以省略
+        binary_mask = (combine_dense > 0).float()  # shape: [N, num_experts]
+        
+        # 计算共现矩阵：shape [num_experts, num_experts]
+        # 其中 entry (i, j) 表示有多少 token 同时激活了专家 i 和专家 j
+        co_occurrence = torch.matmul(binary_mask.transpose(0, 1), binary_mask)
+        
+        # 我们不关心自己与自己的共现，因此将对角线置 0
+        # co_occurrence.fill_diagonal_(0)
+        
+        # 如果只需要上三角部分（因为 C 是对称的）
+        co_occurrence_upper = torch.triu(co_occurrence, diagonal=1)
+        
+        return co_occurrence_upper
+    
+
+    def compute_jaccard_scores(self, co_occurrence: torch.Tensor, expert_activation_counts: torch.Tensor, min_count: int = 1):
+        """
+        根据 Jaccard 相似度计算专家对得分，并返回排名列表。
+        
+        Args:
+            co_occurrence (torch.Tensor): 专家共现矩阵，形状为 [num_experts, num_experts]（对角线为0）。
+            expert_activation_counts (torch.Tensor): 每个专家的激活总数，形状为 [num_experts]。
+            min_count (int): 只返回共现次数大于等于此阈值的专家对。
+            
+        Returns:
+            ranked_pairs (List[Tuple[int, int, float]]): 每个元素为 (expert_i, expert_j, jaccard_score)
+                值越大表示两个专家关系越紧密。
+        """
+        num_experts = co_occurrence.size(0)
+        pairs = []
+        for i in range(num_experts):
+            for j in range(i+1, num_experts):
+                co_count = co_occurrence[i, j].item()
+                if co_count < min_count:
+                    continue
+                # 计算两个专家的并集大小：C_i + C_j - C_ij
+                union = expert_activation_counts[i].item() + expert_activation_counts[j].item() - co_count
+                if union > 0:
+                    jaccard_score = co_count / union
+                    pairs.append((i, j, jaccard_score))
+        # 按照得分降序排序
+        ranked_pairs = sorted(pairs, key=lambda x: x[2], reverse=True)
+        return ranked_pairs
+
+
+    def forward(self, hidden_states: torch.Tensor):
+        """
+        Args:
+            hidden_states (torch.Tensor): 输入张量，形状为 [batch_size, seq_len, hidden_size] 或 [N, hidden_size]。
+
+        Returns:
+            output (torch.Tensor): 与输入形状一致的输出张量。
+            l_aux (torch.Tensor): 从 gate 返回的辅助负载均衡损失。
+            exp_counts (torch.Tensor): 各专家激活 token 的统计信息。
+        """
+        orig_shape = hidden_states.shape
+        # 将输入展平成 [N, hidden_size]
+        x = hidden_states.view(-1, self.hidden_size)
+        N = x.size(0)
+
+        # 1. 专家路由：得到 l_aux, combine_weights, dispatch_mask, exp_counts
+        l_aux, combine_weights, dispatch_mask, exp_counts = self.gate(x)
+        combine_weights = combine_weights.to(x.dtype)
+
+        # 将 combine_weights 在 capacity 维度上求和，形状：[N, num_experts]
+        combine_dense = combine_weights.sum(dim=-1)
+
+        # 2. Fused 下投影：
+        # 从 embedding 中恢复 expert_down_weight，形状为 [num_experts, hidden_size, expert_dim]
+        expert_down_weight = self.expert_down.weight.view(self.num_experts, self.hidden_size, self.expert_dim)
+        # 将 expert_down_weight 转置并融合为 [hidden_size, num_experts * expert_dim]
+        fused_down = expert_down_weight.transpose(0, 1).reshape(self.hidden_size, self.num_experts * self.expert_dim)
+        # 对输入 x 做一次 dense 运算，获得中间输出：[N, num_experts * expert_dim]
+        intermediate_flat = x.matmul(fused_down)
+        # 变换形状到 [N, num_experts, expert_dim]
+        intermediate_all = intermediate_flat.view(N, self.num_experts, self.expert_dim)
+
+        # 3. 可选：专家内门控
+        if self.use_expert_gate:
+            # 从 embedding 中恢复 expert_gate_weight，形状为 [num_experts, hidden_size, expert_dim]
+            expert_gate_weight = self.expert_gate.weight.view(self.num_experts, self.hidden_size, self.expert_dim)
+            fused_gate = expert_gate_weight.transpose(0, 1).reshape(self.hidden_size, self.num_experts * self.expert_dim)
+            gate_flat = x.matmul(fused_gate)
+            gate_vals = gate_flat.view(N, self.num_experts, self.expert_dim)
+            intermediate_all = intermediate_all * self.activation(gate_vals)
+        else:
+            intermediate_all = self.dropout(self.activation(intermediate_all))
+
+        # 4. 上投影及加权求和：
+        # 从 embedding 中恢复 expert_up_weight，形状为 [num_experts, expert_dim, hidden_size]
+        expert_up_weight = self.expert_up.weight.view(self.num_experts, self.expert_dim, self.hidden_size)
+        # 计算公式：
+        #   output[n, h] = sum_{e, b} combine_dense[n, e] * intermediate_all[n, e, b] * expert_up_weight[e, b, h]
+        output = torch.einsum('ne, neb, ebh -> nh', combine_dense, intermediate_all, expert_up_weight)
+
+        # co_occurrence = self.count_expert_cooccurrence(combine_dense)
+        # ranked_pairs = self.compute_jaccard_scores(co_occurrence, exp_counts)
+        # print(f"Co-occurrence matrix: {co_occurrence}")
+        # print(f"Ranked pairs: {ranked_pairs[:3]}")
+
+        # 恢复原始形状（例如 [batch_size, seq_len, hidden_size]）
+        output = output.view(*orig_shape)
         return output, l_aux, exp_counts
 
 
@@ -1170,6 +1433,7 @@ class MoEQwen2VLForConditionalGeneration(Qwen2VLForConditionalGeneration):
             self.config.lora['target_modules'] = model_args.train_modules
         
         if getattr(model_args, 'mone_enable', False):
+            self.config.mone['mone_enable'] = model_args.mone_enable
             self.config.mone['mone_expert_type'] = model_args.mone_expert_type
             self.config.mone['mone_gate_type'] = model_args.mone_gate_type
             self.config.mone['mone_r'] = model_args.mone_r
@@ -1177,6 +1441,9 @@ class MoEQwen2VLForConditionalGeneration(Qwen2VLForConditionalGeneration):
             self.config.mone['mone_num_heads'] = model_args.mone_num_heads
             self.config.mone['mone_use_query_bn'] = model_args.mone_use_query_bn
             self.config.mone['mone_act_fn'] = model_args.mone_act_fn
+            self.config.mone['mone_use_expert_gate'] = model_args.mone_use_expert_gate
+            self.config.mone['mone_load_original'] = model_args.mone_load_original
+            self.config.mone['mone_forward_mode'] = model_args.mone_forward_mode
 
         self.config.moe['moe_enable'] = model_args.moe_enable
         self.config.moe['train_modules'] = model_args.train_modules
@@ -1189,6 +1456,7 @@ class MoEQwen2VLForConditionalGeneration(Qwen2VLForConditionalGeneration):
         self.config.moe['min_capacity'] = model_args.min_capacity
         self.config.moe['use_residual'] = model_args.use_residual
         self.config.moe['router_aux_loss_coef'] = self.router_aux_loss_coef = model_args.router_aux_loss_coef
+        self.config.moe['use_shared_experts'] = model_args.use_shared_experts
         
         # Freeze all parameters except those specified in train_modules
         if self.config.moe['train_modules'] is not None and len(self.config.moe['train_modules']) > 0:
@@ -1230,9 +1498,10 @@ class MoEQwen2VLForConditionalGeneration(Qwen2VLForConditionalGeneration):
 
         # Convert specified layers to MoE
         for num_experts, layer_num in zip(self.config.moe['num_experts'], moe_layers_idx):
+            original_mlp = self.model.layers[layer_num].mlp
             if not getattr(model_args, 'mone_enable', False):
-                pretrained_state_dict = self.model.layers[layer_num].mlp.state_dict()
-                self.model.layers[layer_num].mlp = MoE(
+                pretrained_state_dict = original_mlp.state_dict()
+                moe_layer = MoE(
                     self.config.hidden_size,
                     expert=self.model.layers[layer_num].mlp,
                     num_experts=num_experts,
@@ -1244,15 +1513,13 @@ class MoEQwen2VLForConditionalGeneration(Qwen2VLForConditionalGeneration):
                     use_residual=model_args.use_residual,
                 )
                 # Verify weights are properly copied
-                for e in self.model.layers[layer_num].mlp.deepspeed_moe.experts.deepspeed_experts:
+                for e in moe_layer.deepspeed_moe.experts.deepspeed_experts:
                     loaded_state_dict = e.state_dict()
                     assert all([torch.allclose(pretrained_state_dict[k], v) for k, v in loaded_state_dict.items()])
                     assert all([torch.allclose(loaded_state_dict[k], v) for k, v in pretrained_state_dict.items()])
             else:
-                rank0_print(f"Using MoE with Mixture of Nano Experts")
-                # 保存原始MLP
-                original_mlp = self.model.layers[layer_num].mlp
-                mone_r = self.config.mone['mone_r']
+                hidden_size = self.config.hidden_size
+                mone_r = expert_dim = self.config.mone['mone_r']
                 mone_dropout = self.config.mone['mone_dropout']
                 
                 if model_args.mone_expert_type == 'small_expert':
@@ -1285,18 +1552,64 @@ class MoEQwen2VLForConditionalGeneration(Qwen2VLForConditionalGeneration):
                         use_query_bn=self.config.mone['mone_use_query_bn'],      # 使用批量归一化提高稳定性, True
                         act_fn=self.config.mone['mone_act_fn'],          # 可选: "relu", "gelu", "silu", silu
                         dropout=self.config.mone['mone_dropout'],            # 专家dropout率
+                        use_expert_gate=self.config.mone['mone_use_expert_gate'],  # 是否使用专家门控
+                        forward_mode=model_args.mone_forward_mode,  # 前向模式
+                    )
+                elif model_args.mone_expert_type == 'dense_mask_expert':
+                    moe_layer = DenseMaskMoE(
+                        self.config.hidden_size,
+                        expert_dim=expert_dim,
+                        num_experts=num_experts,
+                        k=model_args.top_k_experts,
+                        capacity_factor=model_args.capacity_factor,
+                        eval_capacity_factor=model_args.eval_capacity_factor,
+                        min_capacity=model_args.min_capacity,
+                        use_expert_gate=model_args.mone_use_expert_gate,
                     )
                 else:
                     raise NotImplementedError(f"Unsupported expert type: {model_args.mone_expert_type}")
-                
-                # 替换原始MLP为组合层
-                self.model.layers[layer_num].mlp = CombinedLayer(original_mlp, moe_layer)
 
-                for name, param in self.model.named_parameters():
-                    if 'deepspeed_moe' in name:
-                        param.requires_grad = True
-                    # else:
-                    #     param.requires_grad = False
+            if getattr(model_args, 'mone_enable', False) and model_args.mone_load_original:
+                with torch.no_grad():
+                    intermediate_size = original_mlp.gate_proj.weight.data.shape[0]
+                    total_expert_dim = num_experts * expert_dim
+                    if total_expert_dim % intermediate_size != 0:
+                        raise ValueError(
+                            f"无法进行扩展初始化，因为 num_experts * expert_dim ({total_expert_dim}) "
+                            f"不能整除 intermediate_size ({intermediate_size})"
+                        )
+                    m = total_expert_dim // intermediate_size  # 复制因子
+
+                    if self.config.mone['mone_use_expert_gate']:
+                        gate_proj_weight = original_mlp.gate_proj.weight.data # (intermediate_size, hidden_size)
+                        if m > 1:
+                            gate_proj_weight = gate_proj_weight.repeat(m, 1) # (m * intermediate_size, hidden_size)
+                        gate_proj_weight_reshaped = gate_proj_weight.view(num_experts, expert_dim, hidden_size)
+                        gate_proj_weight_flat = gate_proj_weight_reshaped.reshape(num_experts, expert_dim * hidden_size)
+                    up_proj_weight = original_mlp.up_proj.weight.data
+                    if m > 1:
+                        up_proj_weight = up_proj_weight.repeat(m, 1)
+                    up_proj_weight_reshaped = up_proj_weight.view(num_experts, expert_dim, hidden_size)
+                    up_proj_weight_flat = up_proj_weight_reshaped.reshape(num_experts, expert_dim * hidden_size)
+                    down_proj_weight = original_mlp.down_proj.weight.data.t()
+                    if m > 1:
+                        down_proj_weight = down_proj_weight.repeat(m, 1)
+                    down_proj_weight_reshaped = down_proj_weight.view(num_experts, expert_dim, hidden_size)
+                    down_proj_weight_flat = down_proj_weight_reshaped.reshape(num_experts, expert_dim * hidden_size)
+                    
+                    if model_args.mone_expert_type == 'embedding_expert':
+                        moe_layer.moe.expert_gate.weight.data.copy_(gate_proj_weight_flat)
+                        moe_layer.moe.expert_down.weight.data.copy_(up_proj_weight_flat)
+                        moe_layer.moe.expert_up.weight.data.copy_(down_proj_weight_flat)
+                    elif model_args.mone_expert_type == 'dense_mask_expert':
+                        moe_layer.expert_gate.weight.data.copy_(gate_proj_weight_flat)
+                        moe_layer.expert_down.weight.data.copy_(up_proj_weight_flat)
+                        moe_layer.expert_up.weight.data.copy_(down_proj_weight_flat)
+
+                    print(f'Successfully initialized weights for {num_experts} experts in layer {layer_num}')
+            if model_args.use_shared_experts:
+                moe_layer = CombinedLayer(self.model.layers[layer_num].mlp, moe_layer)
+            self.model.layers[layer_num].mlp = moe_layer
 
         # # 冻结普通MLP层，只训练MoE层
         # for name, param in self.model.named_parameters():
@@ -1346,21 +1659,18 @@ class EvalMoEQwen2VLForConditionalGeneration(MoEQwen2VLForConditionalGeneration)
             get_peft_model(self, lora_config)
         
         if getattr(self.config, 'mone', False):
-            mone_expert_type = self.config.mone['mone_expert_type']
-            mone_gate_type = self.config.mone['mone_gate_type']
-            mone_r = self.config.mone['mone_r']
-            mone_dropout = self.config.mone['mone_dropout'] 
+            mone_expert_type = self.config.mone.get('mone_expert_type', 'embedding_expert')
 
         self.router_aux_loss_coef = self.config.moe['router_aux_loss_coef']
         num_layers = self.config.num_hidden_layers
         moe_layers_idx = self.config.moe['moe_layers_idx']
 
         # Reinitialize MoE layers for evaluation
-        for num_experts, layer_num in zip(self.config.moe['num_experts'], moe_layers_idx):
+        for num_experts, layer_num in zip(self.config.moe.get('num_experts'), moe_layers_idx):
+            original_mlp = self.model.layers[layer_num].mlp
             if getattr(self.config, 'mone', False):
-                original_mlp = self.model.layers[layer_num].mlp
-                mone_r = self.config.mone['mone_r']
-                mone_dropout = self.config.mone['mone_dropout']
+                mone_r = self.config.mone.get('mone_r', 2)
+                mone_dropout = self.config.mone.get('mone_dropout', 0.0)
                 
                 if mone_expert_type == 'small_expert':
                     # 创建小专家实例
@@ -1370,46 +1680,58 @@ class EvalMoEQwen2VLForConditionalGeneration(MoEQwen2VLForConditionalGeneration)
                         self.config.hidden_size,
                         expert=small_expert,  # 使用小专家
                         num_experts=num_experts,
-                        ep_size=self.config.moe['ep_size'],
-                        k=self.config.moe['top_k_experts'],
-                        capacity_factor=self.config.moe['capacity_factor'],
-                        eval_capacity_factor=self.config.moe['eval_capacity_factor'],
-                        min_capacity=self.config.moe['min_capacity'],
-                        use_residual=self.config.moe['use_residual'],
+                        ep_size=self.config.moe.get('ep_size'),
+                        k=self.config.moe.get('top_k_experts'),
+                        capacity_factor=self.config.moe.get('capacity_factor'),
+                        eval_capacity_factor=self.config.moe.get('eval_capacity_factor'),
+                        min_capacity=self.config.moe.get('min_capacity'),
+                        use_residual=self.config.moe.get('use_residual'),
                     )
                 elif mone_expert_type == 'embedding_expert':
                     moe_layer = EmbeddedMoELayer(
                         hidden_size=self.config.hidden_size,
                         num_experts=num_experts,  # 可设置为1M专家
-                        expert_dim=mone_r,           # 单神经元专家
-                        k=self.config.moe['top_k_experts'],                   # 每个token选择的专家数
-                        capacity_factor=self.config.moe['capacity_factor'],
-                        eval_capacity_factor=self.config.moe['eval_capacity_factor'],
-                        min_capacity=self.config.moe['min_capacity'],
-                        use_residual=self.config.moe['use_residual'],
-                        gate_type=self.config.mone['mone_gate_type'],
-                        num_heads=self.config.mone['mone_num_heads'],            # 多头专家选择, 8
-                        use_query_bn=self.config.mone['mone_use_query_bn'],      # 使用批量归一化提高稳定性, True
-                        act_fn=self.config.mone['mone_act_fn'],          # 可选: "relu", "gelu", "silu", silu
-                        dropout=self.config.mone['mone_dropout'],            # 专家dropout率
+                        expert_dim=mone_r,        # 单神经元专家
+                        k=self.config.moe.get('top_k_experts'),
+                        gate_type=self.config.mone.get('mone_gate_type', 'token_gating'),
+                        capacity_factor=self.config.moe.get('capacity_factor'),
+                        eval_capacity_factor=self.config.moe.get('eval_capacity_factor'),
+                        min_capacity=self.config.moe.get('min_capacity'),
+                        use_residual=self.config.moe.get('use_residual'),
+                        num_heads=self.config.mone.get('mone_num_heads', 1),       # 多头专家选择
+                        use_query_bn=self.config.mone.get('mone_use_query_bn', False),   # 使用批量归一化提高稳定性
+                        act_fn=self.config.mone.get('mone_act_fn', 'silu'),               # 可选: "relu", "gelu", "silu"
+                        dropout=self.config.mone.get('mone_dropout', 0.0),             # 专家 dropout 率
+                        use_expert_gate=self.config.mone.get('use_expert_gate', False),    # 是否使用专家门控
+                    )
+                elif mone_expert_type == 'dense_mask_expert':
+                    moe_layer = DenseMaskMoE(
+                        self.config.hidden_size,
+                        expert_dim=mone_r,
+                        num_experts=num_experts,
+                        k=self.config.moe.get('top_k_experts'),
+                        capacity_factor=self.config.moe.get('capacity_factor'),
+                        eval_capacity_factor=self.config.moe.get('eval_capacity_factor'),
+                        min_capacity=self.config.moe.get('min_capacity'),
+                        use_expert_gate=self.config.mone.get('use_expert_gate', False),
                     )
                 else:
                     raise NotImplementedError(f"Unsupported expert type: {mone_expert_type}")
-                
-                # 替换原始MLP为组合层
-                self.model.layers[layer_num].mlp = CombinedLayer(original_mlp, moe_layer)
             else:
-                self.model.layers[layer_num].mlp = MoE(
+                moe_layer = MoE(
                     self.config.hidden_size,
                     expert=self.model.layers[layer_num].mlp,
                     num_experts=num_experts,
-                    ep_size=self.config.moe['ep_size'],
-                    k=self.config.moe['top_k_experts'],
-                    capacity_factor=self.config.moe['capacity_factor'],
-                    eval_capacity_factor=self.config.moe['eval_capacity_factor'],
-                    min_capacity=self.config.moe['min_capacity'],
-                    use_residual=self.config.moe['use_residual'],
+                    ep_size=self.config.moe.get('ep_size'),
+                    k=self.config.moe.get('top_k_experts'),
+                    capacity_factor=self.config.moe.get('capacity_factor'),
+                    eval_capacity_factor=self.config.moe.get('eval_capacity_factor'),
+                    min_capacity=self.config.moe.get('min_capacity'),
+                    use_residual=self.config.moe.get('use_residual'),
                 )
+            if self.config.moe.get('use_shared_experts', False):
+                moe_layer = CombinedLayer(original_mlp, moe_layer)
+            self.model.layers[layer_num].mlp = moe_layer
 
         rank0_print(f"LLM num_layers: {num_layers}, MoE num_layers: {len(moe_layers_idx)}, where\n",
                     *[f'layer-{layer_num} has {num_experts} experts\n' for num_experts, layer_num in
