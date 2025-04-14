@@ -1606,7 +1606,7 @@ class MoEQwen2VLForConditionalGeneration(Qwen2VLForConditionalGeneration):
                         moe_layer.expert_down.weight.data.copy_(up_proj_weight_flat)
                         moe_layer.expert_up.weight.data.copy_(down_proj_weight_flat)
 
-                    print(f'Successfully initialized weights for {num_experts} experts in layer {layer_num}')
+                    rank0_print(f'Successfully initialized weights for {num_experts} experts in layer {layer_num}')
             if model_args.use_shared_experts:
                 moe_layer = CombinedLayer(self.model.layers[layer_num].mlp, moe_layer)
             self.model.layers[layer_num].mlp = moe_layer
@@ -1702,7 +1702,7 @@ class EvalMoEQwen2VLForConditionalGeneration(MoEQwen2VLForConditionalGeneration)
                         use_query_bn=self.config.mone.get('mone_use_query_bn', False),   # 使用批量归一化提高稳定性
                         act_fn=self.config.mone.get('mone_act_fn', 'silu'),               # 可选: "relu", "gelu", "silu"
                         dropout=self.config.mone.get('mone_dropout', 0.0),             # 专家 dropout 率
-                        use_expert_gate=self.config.mone.get('use_expert_gate', False),    # 是否使用专家门控
+                        use_expert_gate=self.config.mone.get('mone_use_expert_gate', False),    # 是否使用专家门控
                     )
                 elif mone_expert_type == 'dense_mask_expert':
                     moe_layer = DenseMaskMoE(
@@ -1713,7 +1713,7 @@ class EvalMoEQwen2VLForConditionalGeneration(MoEQwen2VLForConditionalGeneration)
                         capacity_factor=self.config.moe.get('capacity_factor'),
                         eval_capacity_factor=self.config.moe.get('eval_capacity_factor'),
                         min_capacity=self.config.moe.get('min_capacity'),
-                        use_expert_gate=self.config.mone.get('use_expert_gate', False),
+                        use_expert_gate=self.config.mone.get('mone_use_expert_gate', False),
                     )
                 else:
                     raise NotImplementedError(f"Unsupported expert type: {mone_expert_type}")
@@ -1744,6 +1744,7 @@ class EvalMoEQwen2VLForConditionalGeneration(MoEQwen2VLForConditionalGeneration)
         
         self.model.forward = MoEQwen2VLModel_forward(self.model)
         rank0_print(f'replace Qwen2VLModel.forward to MoEQwen2VLModel.forward')
+        rank0_print(self.model)
     
     get_rope_index = Qwen2VLForConditionalGeneration.get_rope_index
     prepare_inputs_for_generation = Qwen2VLForConditionalGeneration.prepare_inputs_for_generation
