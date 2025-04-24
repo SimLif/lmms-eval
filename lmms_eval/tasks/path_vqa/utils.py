@@ -10,7 +10,7 @@ dir_name = os.path.dirname(os.path.abspath(__file__))
 
 
 from lmms_eval.tasks._task_utils.file_utils import generate_submission_file
-from lmms_eval.tasks.path_vqa.metrics import calculate_exactmatch, calculate_f1score
+from lmms_eval.tasks.path_vqa.metrics import calculate_exactmatch, calculate_f1score, calculate_bleu
 
 
 replace_prompt = " Please answer yes or no."
@@ -43,14 +43,15 @@ def path_vqa_open_process_results(doc, results):
     pred_ans = pred.lower().strip().replace(".", "")
     gt_ans = doc["answer"].lower().strip().replace(".", "")
 
-    # exact_match = calculate_exactmatch(pred_ans, gt_ans)
     f1_score, precision, recall = calculate_f1score(pred_ans, gt_ans)
+    bleu_score = calculate_bleu(pred_ans, gt_ans)
 
     return {
         # "exact_match": exact_match,
-        # "f1": f1_score,
-        # "precision": precision,
+        "f1":  f1_score * 100,
+        "precision": precision * 100,
         "recall": recall * 100,
+        "bleu": bleu_score* 100,
     }
 
 
