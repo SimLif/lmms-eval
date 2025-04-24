@@ -10,7 +10,7 @@ dir_name = os.path.dirname(os.path.abspath(__file__))
 
 
 from lmms_eval.tasks._task_utils.file_utils import generate_submission_file
-from lmms_eval.tasks.slake.metrics import calculate_exactmatch, calculate_f1score, calculate_bleu
+from lmms_eval.tasks.slake.metrics import calculate_exactmatch, calculate_f1score, calculate_bleu, calculate_f1score_old
 
 
 replace_prompt = " Please answer yes or no."
@@ -44,6 +44,7 @@ def slake_open_process_results(doc, results):
     gt_ans = doc["answer"].lower().strip().replace(".", "")
 
     f1_score, precision, recall = calculate_f1score(pred_ans, gt_ans)
+    _, _, recall_old = calculate_f1score_old(pred_ans, gt_ans)
     bleu_score = calculate_bleu(pred_ans, gt_ans)
 
     return {
@@ -51,6 +52,7 @@ def slake_open_process_results(doc, results):
         "f1":  f1_score * 100,
         "precision": precision * 100,
         "recall": recall * 100,
+        "recall_old": recall_old * 100,
         "bleu": bleu_score* 100,
     }
 

@@ -28,6 +28,9 @@ metric_list:
   - metric: recall
     aggregation: mean
     higher_is_better: true
+  - metric: recall_old
+    aggregation: mean
+    higher_is_better: true
   - metric: bleu
     aggregation: mean
     higher_is_better: true
