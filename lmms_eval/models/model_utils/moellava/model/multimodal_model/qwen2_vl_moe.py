@@ -26,6 +26,8 @@ from transformers.utils import ModelOutput
 
 local_rank = None
 
+from .utils import TopKGateDynamic
+
 
 def rank0_print(*args):
     if local_rank == 0:
@@ -1014,6 +1016,7 @@ class DenseMaskMoE(nn.Module):
         use_expert_gate: bool = False,
         gate_type: str = "token_gating",
         kd_align: bool = False,
+        expert_cluster_mask_list: List[Tensor] = None
     ):
         """
         Args:
@@ -1036,18 +1039,31 @@ class DenseMaskMoE(nn.Module):
         self.use_expert_gate = use_expert_gate
         self.gate_type = gate_type
         self.kd_align = kd_align
+        self.expert_cluster_mask_list = expert_cluster_mask_list
 
         if not self.kd_align:
             if gate_type == 'token_gating':
-                self.gate = TopKGate(
-                    model_dim=hidden_size,
-                    num_experts=num_experts,
-                    k=k,
-                    capacity_factor=capacity_factor,
-                    eval_capacity_factor=eval_capacity_factor,
-                    min_capacity=min_capacity,
-                    drop_tokens=True,
-                )
+                if expert_cluster_mask_list is None:
+                    self.gate = TopKGate(
+                        model_dim=hidden_size,
+                        num_experts=num_experts,
+                        k=k,
+                        capacity_factor=capacity_factor,
+                        eval_capacity_factor=eval_capacity_factor,
+                        min_capacity=min_capacity,
+                        drop_tokens=True,
+                    )
+                else:
+                    self.gate = TopKGateDynamic(
+                        model_dim=hidden_size,
+                        num_experts=num_experts,
+                        k=k,
+                        capacity_factor=capacity_factor,
+                        eval_capacity_factor=eval_capacity_factor,
+                        min_capacity=min_capacity,
+                        drop_tokens=True,
+                        expert_cluster_mask_list=expert_cluster_mask_list
+                    )
             elif gate_type == 'dense_gating':
                 self.gate = DenseGate(
                     model_dim=hidden_size,
@@ -1915,6 +1931,7 @@ class EvalMoEQwen2VLForConditionalGeneration(MoEQwen2VLForConditionalGeneration)
         self.router_aux_loss_coef = self.config.moe['router_aux_loss_coef']
         num_layers = self.config.num_hidden_layers
         moe_layers_idx = self.config.moe['moe_layers_idx']
+        expert_cluster_mask_dict = self.config.mone.get('expert_cluster_mask_dict', None)
 
         # Reinitialize MoE layers for evaluation
         for num_experts, layer_num in zip(self.config.moe.get('num_experts'), moe_layers_idx):
@@ -1956,6 +1973,15 @@ class EvalMoEQwen2VLForConditionalGeneration(MoEQwen2VLForConditionalGeneration)
                         use_expert_gate=self.config.mone.get('mone_use_expert_gate', False),    # 是否使用专家门控
                     )
                 elif mone_expert_type == 'dense_mask_expert':
+                    if expert_cluster_mask_dict is not None: 
+                        _expert_cluster_mask_list = expert_cluster_mask_dict[str(layer_num)]
+                        expert_cluster_mask_list = [] 
+                        for ele in _expert_cluster_mask_list:
+                            expert_cluster_mask = torch.zeros(1, num_experts)
+                            expert_cluster_mask[0, ele] = 1
+                            expert_cluster_mask_list.append(expert_cluster_mask.to(torch.bool))
+                    else:
+                        expert_cluster_mask_list = None
                     moe_layer = DenseMaskMoE(
                         self.config.hidden_size,
                         expert_dim=mone_r,
@@ -1966,6 +1992,7 @@ class EvalMoEQwen2VLForConditionalGeneration(MoEQwen2VLForConditionalGeneration)
                         min_capacity=self.config.moe.get('min_capacity'),
                         use_expert_gate=self.config.mone.get('mone_use_expert_gate', False),
                         gate_type=self.config.mone.get('mone_gate_type', 'token_gating'),
+                        expert_cluster_mask_list=expert_cluster_mask_list
                     )
                 else:
                     raise NotImplementedError(f"Unsupported expert type: {mone_expert_type}")
