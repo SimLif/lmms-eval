@@ -1,0 +1,16 @@
+group: vqa_rad_robustness
+task:
+  - vqa_rad_open_image_gaussian_noise
+  - vqa_rad_open_image_rotation
+  - vqa_rad_open_text_char_substitution
+  - vqa_rad_open_text_word_deletion
+  - vqa_rad_open_text_char_substitution_005
+  - vqa_rad_open_text_proportional_char_substitution
+  - vqa_rad_closed_image_gaussian_noise
+  - vqa_rad_closed_image_rotation
+  - vqa_rad_closed_text_char_substitution
+  - vqa_rad_closed_text_word_deletion
+  - vqa_rad_closed_text_char_substitution_005
+  - vqa_rad_closed_text_proportional_char_substitution
+metadata:
+  - version: 1.0

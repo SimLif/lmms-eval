@@ -1,0 +1,10 @@
+group: vqa_med_robustness
+task:
+  - vqa_med_image_gaussian_noise
+  - vqa_med_image_rotation
+  - vqa_med_text_char_substitution
+  - vqa_med_text_word_deletion
+  - vqa_med_text_char_substitution_005
+  - vqa_med_text_proportional_char_substitution
+metadata:
+  - version: 1.0

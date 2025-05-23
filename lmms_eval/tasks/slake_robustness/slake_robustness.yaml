@@ -1,0 +1,16 @@
+group: slake_robustness
+task:
+  - slake_open_image_gaussian_noise
+  - slake_open_image_rotation
+  - slake_open_text_char_substitution
+  - slake_open_text_word_deletion
+  - slake_open_text_char_substitution_005
+  - slake_open_text_proportional_char_substitution
+  - slake_closed_image_gaussian_noise
+  - slake_closed_image_rotation
+  - slake_closed_text_char_substitution
+  - slake_closed_text_word_deletion
+  - slake_closed_text_char_substitution_005
+  - slake_closed_text_proportional_char_substitution
+metadata:
+  - version: 1.0

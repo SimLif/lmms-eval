@@ -1,0 +1,10 @@
+group: pmc_vqa_robustness
+task:
+  - pmc_vqa_image_gaussian_noise
+  - pmc_vqa_image_rotation
+  - pmc_vqa_text_char_substitution
+  - pmc_vqa_text_word_deletion
+  - pmc_vqa_text_char_substitution_005
+  - pmc_vqa_text_proportional_char_substitution
+metadata:
+  - version: 1.0

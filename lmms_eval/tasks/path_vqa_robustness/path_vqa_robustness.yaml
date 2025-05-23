@@ -1,0 +1,16 @@
+group: path_vqa_robustness
+task:
+  - path_vqa_open_image_gaussian_noise
+  - path_vqa_open_image_rotation
+  - path_vqa_open_text_char_substitution
+  - path_vqa_open_text_word_deletion
+  - path_vqa_open_text_char_substitution_005
+  - path_vqa_open_text_proportional_char_substitution
+  - path_vqa_closed_image_gaussian_noise
+  - path_vqa_closed_image_rotation
+  - path_vqa_closed_text_char_substitution
+  - path_vqa_closed_text_word_deletion
+  - path_vqa_closed_text_char_substitution_005
+  - path_vqa_closed_text_proportional_char_substitution
+metadata:
+  - version: 1.0

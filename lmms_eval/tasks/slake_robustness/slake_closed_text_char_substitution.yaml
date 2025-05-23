@@ -1,9 +1,10 @@
-tag: medmoe_vqa
-dataset_path: /mnt/data/haoqiang/workspace/data/medmoe-slake
+# tag: medvqa_robustness
+tag: text_char_substitution
+dataset_path: /mnt/data/haoqiang/workspace/data/slake-robustness
 dataset_kwargs:
   token: True
-task: "slake_closed"
-test_split: test_closed
+task: "slake_closed_text_char_substitution"
+test_split: test_closed_text_char_substitution
 output_type: generate_until
 doc_to_visual: !function utils.slake_doc_to_visual
 doc_to_text: !function utils.slake_doc_to_text

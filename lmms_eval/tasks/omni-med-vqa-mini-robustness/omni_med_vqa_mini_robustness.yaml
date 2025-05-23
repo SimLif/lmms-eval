@@ -1,0 +1,10 @@
+group: omni_med_vqa_mini_robustness
+task:
+  - omni_med_vqa_mini_image_gaussian_noise
+  - omni_med_vqa_mini_image_rotation
+  - omni_med_vqa_mini_text_char_substitution
+  - omni_med_vqa_mini_text_word_deletion
+  - omni_med_vqa_mini_text_char_substitution_005
+  - omni_med_vqa_mini_text_proportional_char_substitution
+metadata:
+  - version: 1.0
