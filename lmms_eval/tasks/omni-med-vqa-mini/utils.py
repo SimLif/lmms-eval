@@ -96,6 +96,10 @@ def omni_med_vqa_mini_process_results(doc, results):
     gt_label = doc["label"]
     
     pred_label, random_flag = parse_multi_choice_response(pred, all_choices, index2ans, random_seed=0)
-    acc = 100 if str(pred_label) == str(gt_label) else 0
+    if random_flag:
+        eval_logger.warning(f"Randomly selected answer: {pred_label} for question: {doc['input']}")
+        acc = 0
+    else:
+        acc = 100 if str(pred_label) == str(gt_label) else 0
 
     return {'accuracy': acc, 'random_flag': random_flag}
