@@ -1,0 +1,54 @@
+tag: medmoe_vqa_r1
+dataset_path: /mnt/data/haoqiang/workspace/data/medmoe-path-vqa
+dataset_kwargs:
+  token: True
+task: "path_vqa_open_r1"
+test_split: test_open
+output_type: generate_until
+doc_to_visual: !function utils.path_vqa_doc_to_visual
+doc_to_text: !function utils.path_vqa_doc_to_text
+doc_to_target: "answer"
+generation_kwargs:
+  max_new_tokens: 1024
+  temperature: 0
+  top_p: 1.0
+  num_beams: 1
+  do_sample: false
+  answer_type: "open"
+# The return value of process_results will be used by metrics
+process_results: !function utils.path_vqa_open_process_results
+# Note that the metric name can be either a registed metric function (such as the case for GQA) or a key name returned by process_results
+metric_list:
+  - metric: f1
+    aggregation: mean
+    higher_is_better: true 
+  - metric: precision
+    aggregation: mean
+    higher_is_better: true
+  - metric: recall
+    aggregation: mean
+    higher_is_better: true
+  - metric: recall_old
+    aggregation: mean
+    higher_is_better: true
+  - metric: bleu
+    aggregation: mean
+    higher_is_better: true
+lmms_eval_specific_kwargs:
+  default:
+    pre_prompt: ""
+    post_prompt: "\nPlease analyze the image and the question. First, present your thinking process within <think></think> tags. Then, provide a concise, direct answer within <answer></answer> tags."
+  gpt4v:
+    pre_prompt: ""
+    post_prompt: "\nAnswer the question with Yes or No."
+  qwen_vl:  
+    pre_prompt: ""
+    post_prompt: " Answer:"
+  otterhd:
+    pre_prompt: ""
+    post_prompt: " Answer:"
+  xcomposer2_4khd:
+    pre_prompt: "[UNUSED_TOKEN_146]user\n"
+    post_prompt: " Answer this question briefly[UNUSED_TOKEN_145]\n[UNUSED_TOKEN_146]assistant\n"
+metadata:
+  - version: 0.0

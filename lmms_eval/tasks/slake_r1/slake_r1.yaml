@@ -1,0 +1,6 @@
+group: slake_r1
+task:
+  - slake_open_r1
+  - slake_closed_r1
+metadata:
+  - version: 1.0

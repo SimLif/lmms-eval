@@ -1,0 +1,6 @@
+group: vqa_rad_r1
+task:
+  - vqa_rad_open_r1
+  - vqa_rad_closed_r1
+metadata:
+  - version: 1.0
