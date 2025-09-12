@@ -728,8 +728,10 @@ def topkgating_adaptive_grouping(
             # 计算每个群组的容量向量 [num_groups]
             capacity = (group_sizes * tokens_per_expert_avg * capacity_factor)
         else:
-            capacity = torch.zeros_like(group_sizes)
+            capacity = torch.zeros_like(group_sizes, dtype=torch.float32)
 
+        # Ensure that any non-zero capacity is at least 1 before clamping.
+        capacity = torch.ceil(capacity)
         capacity = torch.clamp(capacity, min=min_capacity).long()
         # --- END MODIFICATION ---
 
@@ -1585,7 +1587,7 @@ class AdaptiveGroupingMoE(nn.Module):
         else:
             # Use deterministic argmax for evaluation
             expert_to_group_idx = torch.argmax(group_assignment_logits, dim=0)
-            hard_assignment = F.one_hot(expert_to_group_idx, num_classes=self.max_groups).float().T
+            hard_assignment = F.one_hot(expert_to_group_idx, num_classes=self.max_groups).to(group_assignment_logits.dtype).T
         
         # 计算每个群组的专家数量
         group_sizes = hard_assignment.sum(dim=1)
