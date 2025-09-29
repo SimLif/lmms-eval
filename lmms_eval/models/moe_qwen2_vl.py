@@ -62,7 +62,16 @@ class MoE_Qwen2_VL(lmms):
         if use_flash_attention_2:
             raise NotImplementedError("Flash Attention 2 is not implemented for MoE_Qwen2_VL")
         else:
-            self._model = EvalMoEQwen2VLForConditionalGeneration.from_pretrained(pretrained, torch_dtype="auto", device_map=self.device_map).eval()
+            if '@' in pretrained:
+                base_pretrained, lora_pretrained = pretrained.split('@')
+                model = EvalMoEQwen2VLForConditionalGeneration.from_pretrained(base_pretrained, torch_dtype="auto", device_map=self.device_map)
+                from peft import PeftModel
+                self._model = PeftModel.from_pretrained(model, lora_pretrained, device=self.device_map).eval()
+                print('----- Model Structure -----')
+                print(self._model)
+                pretrained = lora_pretrained
+            else:
+                self._model = EvalMoEQwen2VLForConditionalGeneration.from_pretrained(pretrained, torch_dtype="auto", device_map=self.device_map).eval()
         self.processor = AutoProcessor.from_pretrained(pretrained, max_pixels=max_pixels, min_pixels=min_pixels)
         self.max_pixels = max_pixels
         self.min_pixels = min_pixels
