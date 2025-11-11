@@ -1,5 +1,5 @@
 tag: medmoe_vqa_r1
-dataset_path: /mnt/data/haoqiang/workspace/data/medmoe-path-vqa
+dataset_path: /project/c4gcot/datasets/medmoe-path-vqa
 dataset_kwargs:
   token: True
 task: "path_vqa_open_r1"

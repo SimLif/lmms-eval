@@ -1,6 +1,6 @@
 # tag: medvqa_robustness
 tag: image_gaussian_noise
-dataset_path: /mnt/data/haoqiang/workspace/data/pmc-vqa-robustness
+dataset_path: /project/c4gcot/datasets/pmc-vqa-robustness
 dataset_kwargs:
   token: True
 task: "pmc_vqa_image_gaussian_noise"

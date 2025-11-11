@@ -1,6 +1,6 @@
 # tag: medvqa_robustness
 tag: text_char_substitution
-dataset_path: /mnt/data/haoqiang/workspace/data/omni-med-vqa-mini-robustness
+dataset_path: /project/c4gcot/datasets/omni-med-vqa-mini-robustness
 dataset_kwargs:
   token: True
 task: "omni_med_vqa_mini_text_char_substitution"

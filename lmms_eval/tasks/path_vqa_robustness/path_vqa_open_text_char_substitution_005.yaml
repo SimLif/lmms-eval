@@ -1,6 +1,6 @@
 # tag: medvqa_robustness
 tag: text_char_substitution_005
-dataset_path: /mnt/data/haoqiang/workspace/data/path-vqa-robustness
+dataset_path: /project/c4gcot/datasets/path-vqa-robustness
 dataset_kwargs:
   token: True
 task: "path_vqa_open_text_char_substitution_005"

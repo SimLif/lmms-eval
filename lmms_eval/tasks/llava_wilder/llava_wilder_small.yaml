@@ -1,4 +1,4 @@
-dataset_path: /mnt/data/haoqiang/workspace/data/LLaVA-Bench-Wilder
+dataset_path: /project/c4gcot/datasets/LLaVA-Bench-Wilder
 dataset_kwargs:
   token: True
 task: "llava_wilder_small"

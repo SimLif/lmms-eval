@@ -1,5 +1,5 @@
 tag: medmoe_vqa_r1
-dataset_path: /mnt/data/haoqiang/workspace/data/medmoe-vqa-rad
+dataset_path: /project/c4gcot/datasets/medmoe-vqa-rad
 dataset_kwargs:
   token: True
 task: "vqa_rad_closed_r1"

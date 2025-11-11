@@ -1,6 +1,6 @@
 # tag: medvqa_robustness
 tag: image_rotation
-dataset_path: /mnt/data/haoqiang/workspace/data/vqa-med-robustness
+dataset_path: /project/c4gcot/datasets/vqa-med-robustness
 dataset_kwargs:
   token: True
 task: "vqa_med_image_rotation"

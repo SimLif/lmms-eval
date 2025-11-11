@@ -1,5 +1,5 @@
 tag: medmoe_vqa_r1
-dataset_path: /mnt/data/haoqiang/workspace/data/medmoe-slake
+dataset_path: /project/c4gcot/datasets/medmoe-slake
 dataset_kwargs:
   token: True
 task: "slake_open_r1"

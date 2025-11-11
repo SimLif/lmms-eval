@@ -1,6 +1,6 @@
 # tag: medvqa_robustness
 tag: text_proportional_char_substitution
-dataset_path: /mnt/data/haoqiang/workspace/data/pmc-vqa-robustness
+dataset_path: /project/c4gcot/datasets/pmc-vqa-robustness
 dataset_kwargs:
   token: True
 task: "pmc_vqa_text_proportional_char_substitution"
