@@ -30,12 +30,19 @@ def hb_doc_to_text(doc, lmms_eval_specific_kwargs=None):
 
 
 def hb_doc_to_visual(doc):
-    return [doc["image"].convert("RGB")]
+    """Convert document to visual input."""
+    num_image = int(os.environ.get("NUM_IMAGE", "1"))
+
+    if num_image == 1:
+        return [doc["image"].convert("RGB")]
+    elif num_image == 2:
+        return [doc["image"].convert("RGB"), doc["image"].convert("RGB")]
+    else:
+        raise ValueError(f"num_image must be 1 or 2, got {num_image}")
 
 
 def hb_process_results(doc, result):
-    sample = doc
-    doc.pop("image")
+    sample = {k: v for k, v in doc.items() if k != "image"}
     sample["model_prediction"] = result[0]
     return {k: sample for k in metric}
 

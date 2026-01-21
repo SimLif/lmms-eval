@@ -157,12 +157,30 @@ def videomme_doc_to_visual(doc):
 
 
 def videomme_doc_to_text(doc, lmms_eval_specific_kwargs=None):
+
+    if "format" in lmms_eval_specific_kwargs and lmms_eval_specific_kwargs["format"] == "qwen3_vl":
+        return videomme_doc_to_text_qwen3vl(doc, lmms_eval_specific_kwargs)
+
     option_prompt = "Select the best answer to the following multiple-choice question based on the video and the subtitles. Respond with only the letter (A, B, C, or D) of the correct option."
     question = doc["question"]
     option = "\n".join([f"{opt}" for i, opt in enumerate(doc["options"])])
     question = question + "\n" + option
     post_prompt = lmms_eval_specific_kwargs["post_prompt"] if "post_prompt" in lmms_eval_specific_kwargs else "The best answer is:"
     full_prompt = option_prompt + "\n" + question + "\n" + post_prompt
+    return full_prompt
+
+
+def videomme_doc_to_text_qwen3vl(doc, lmms_eval_specific_kwargs=None):
+    """
+    Adapted from: https://github.com/open-compass/VLMEvalKit/blob/main/vlmeval/vlm/qwen3_vl/prompt.py#L93
+    """
+    pre_prompt = lmms_eval_specific_kwargs.get("pre_prompt", "")
+    post_prompt = lmms_eval_specific_kwargs.get("post_prompt", "")
+
+    question = doc["question"]
+    option = "\n".join([f"{opt}" for i, opt in enumerate(doc["options"])])
+
+    full_prompt = f"{pre_prompt}{question}\nOptions:\n{option}\n{post_prompt}"
     return full_prompt
 
 
@@ -228,6 +246,11 @@ def videomme_doc_to_text_subtitle(doc, lmms_eval_specific_kwargs=None):
                 subtitle_text = "\n".join(textlist)
         subtitle = subtitle_text
 
+    if "format" in lmms_eval_specific_kwargs and lmms_eval_specific_kwargs["format"] == "qwen3_vl":
+        prompt = videomme_doc_to_text_qwen3vl(doc, lmms_eval_specific_kwargs)
+        full_prompt = subtitles_prompt + subtitle + "\n" + prompt
+        return full_prompt
+
     option_prompt = "Select the best answer to the following multiple-choice question based on the video and the subtitles. Respond with only the letter (A, B, C, or D) of the correct option."
     question = doc["question"]
     option = "\n".join([f"{opt}" for i, opt in enumerate(doc["options"])])
@@ -277,15 +300,27 @@ def videomme_process_results(doc, results):
     """
     pred = results[0]
     pred_ans = extract_characters_regex(pred)
-    # gt_ans = doc["answer"].lower().strip().replace(".", "")
+    gt_ans = doc["answer"]
 
     category = doc["domain"]
     sub_category = doc["sub_category"]
     task_category = doc["task_type"]
-    data_dict = {"question_id": doc["question_id"], "duration": doc["duration"], "category": category, "sub_category": sub_category, "task_category": task_category, "pred_answer": pred_ans, "answer": doc["answer"]}
+    # score: 0/1 correctness for stderr calculation
+    # videoID: for clustered stderr (questions from same video are correlated)
+    score = 1.0 if pred_ans.lower() == gt_ans.lower() else 0.0
+    data_dict = {
+        "question_id": doc["question_id"],
+        "duration": doc["duration"],
+        "category": category,
+        "sub_category": sub_category,
+        "task_category": task_category,
+        "pred_answer": pred_ans,
+        "answer": gt_ans,
+        "score": score,
+        "videoID": doc["videoID"],
+    }
 
-    # return {f"videomme_perception_score": data_dict for metric in matrices}
-    return {f"videomme_perception_score": data_dict}
+    return {"videomme_perception_score": data_dict}
 
 
 def videomme_aggregate_results(results):

@@ -2,21 +2,21 @@
 line-length = 240
 
 [build-system]
-requires = ["setuptools>=42", "wheel", "setuptools_scm[tomli]>=6.3"]
+requires = ["setuptools>=42", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "lmms_eval"
-version = "0.4.1"
+version = "0.5.0"
 authors = [
     { name = "LMMMs-Lab Evaluation Team", email = "lmms-lab@outlook.com" },
 ]
 description = "A framework for evaluating large multi-modality language models"
 readme = "README.md"
-license = { file = "LICENSE" }
+license = "MIT"
+license-files = ["LICENSE"]
 classifiers = [
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
 requires-python = ">=3.9"
@@ -26,16 +26,17 @@ dependencies = [
     "isort>=5.13.2",
     "datasets>=2.19.0",
     "evaluate>=0.4.0",
-    "httpx==0.23.3",
+    "httpx>=0.23.3",
     "jsonlines",
+    "aiohttp",
     "numexpr",
-    "numpy==1.26.4",
+    "numpy>=1.26.4",
     "peft>=0.2.0",
     "pybind11>=2.6.2",
     "pytablewriter",
     "sacrebleu>=1.5.0",
     "scikit-learn>=0.24.1",
-    "sqlitedict==2.1.0",
+    "sqlitedict>=2.1.0",
     "torch>=2.1.0", # to enable sdpa mode for running 34B model on one 80GB GPU
     "torchvision>=0.16.0",
     "timm",
@@ -43,7 +44,7 @@ dependencies = [
     "ftfy",
     "openai",
     "opencv-python-headless",
-    "av",
+    "av<16.0.0",
     "hf_transfer",
     "nltk",
     "sentencepiece",
@@ -62,7 +63,7 @@ dependencies = [
     "openpyxl",
     "loguru",
     "hf_transfer",
-    "tenacity==8.3.0",
+    "tenacity>=8.3.0",
     "wandb>=0.16.0",
     "tiktoken",
     "pre-commit",
@@ -75,9 +76,19 @@ dependencies = [
     "sentence_transformers",
     "python-dotenv",
     "deepspeed>=0.18.2",
+    "qwen-vl-utils>=0.0.14",
 ]
 
 [project.optional-dependencies]
+core = [
+    "lmms_eval[server]",
+    "lmms_eval[audio]",
+    "lmms_eval[metrics]",
+]
+server = [
+    "fastapi",
+    "uvicorn",
+]
 audio = [
     "more-itertools",
     "editdistance",
@@ -97,7 +108,7 @@ gemini = [
     "google-generativeai",
 ]
 reka = [
-    "httpx==0.23.3",
+    "httpx>=0.23.3",
     "reka-api",
 ]
 qwen = [
@@ -114,6 +125,13 @@ mmsearch = [
     "beautifulsoup4",
     "FlagEmbedding",
     "rouge",
+]
+all = [
+    "lmms_eval[core]",
+    "lmms_eval[gemini]",
+    "lmms_eval[reka]",
+    "lmms_eval[qwen]",
+    "lmms_eval[mmsearch]",
 ]
 
 [tool.setuptools.packages.find]
