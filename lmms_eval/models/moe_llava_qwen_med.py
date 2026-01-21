@@ -17,16 +17,32 @@ from lmms_eval.models.model_utils.qwen.qwen_generate_utils import make_context
 warnings.simplefilter("ignore", category=DeprecationWarning)
 warnings.filterwarnings("ignore")
 
-os.environ['LD_LIBRARY_PATH'] = f"{os.environ.get('LD_LIBRARY_PATH', '')}:/lib/x86_64-linux-gnu:/usr/lib/x86_64-linux-gnu:/usr/local/cuda/lib64"
-from .model_utils.moellava.model.language_model.llava_qwen_moe import EvalMoELLaVAQWenForCausalLM
-from .model_utils.moellava.model.language_model.qwen.tokenization_qwen import QWenTokenizer
-from .model_utils.moellava.conversation import conv_templates, SeparatorStyle
-from .model_utils.moellava.constants import DEFAULT_IMAGE_PATCH_TOKEN, DEFAULT_IM_START_TOKEN, DEFAULT_IM_END_TOKEN, \
-    DEFAULT_VID_END_TOKEN, DEFAULT_VID_START_TOKEN, DEFAULT_VIDEO_PATCH_TOKEN, DEFAULT_IMAGE_TOKEN, IMAGE_TOKEN_INDEX
-from .model_utils.moellava.mm_utils import tokenizer_image_token, get_model_name_from_path, KeywordsStoppingCriteria
-
+os.environ["LD_LIBRARY_PATH"] = f"{os.environ.get('LD_LIBRARY_PATH', '')}:/lib/x86_64-linux-gnu:/usr/lib/x86_64-linux-gnu:/usr/local/cuda/lib64"
 from loguru import logger as eval_logger
 from transformers import AutoModelForCausalLM, AutoTokenizer, GenerationConfig
+
+from .model_utils.moellava.constants import (
+    DEFAULT_IM_END_TOKEN,
+    DEFAULT_IM_START_TOKEN,
+    DEFAULT_IMAGE_PATCH_TOKEN,
+    DEFAULT_IMAGE_TOKEN,
+    DEFAULT_VID_END_TOKEN,
+    DEFAULT_VID_START_TOKEN,
+    DEFAULT_VIDEO_PATCH_TOKEN,
+    IMAGE_TOKEN_INDEX,
+)
+from .model_utils.moellava.conversation import SeparatorStyle, conv_templates
+from .model_utils.moellava.mm_utils import (
+    KeywordsStoppingCriteria,
+    get_model_name_from_path,
+    tokenizer_image_token,
+)
+from .model_utils.moellava.model.language_model.llava_qwen_moe import (
+    EvalMoELLaVAQWenForCausalLM,
+)
+from .model_utils.moellava.model.language_model.qwen.tokenization_qwen import (
+    QWenTokenizer,
+)
 
 
 @register_model("moe_llava_qwen_med")
@@ -69,10 +85,7 @@ class MoE_Llava_Qwen_Med(lmms):
             padding_side="right",
         )
         self._config = self._model.config
-        self.model.generation_config = GenerationConfig.from_pretrained(
-            pretrained, 
-            pad_token_id=self.tokenizer.pad_token_id
-        )
+        self.model.generation_config = GenerationConfig.from_pretrained(pretrained, pad_token_id=self.tokenizer.pad_token_id)
         self.model.generation_config.do_sample = False
         self.model.generation_config.repetition_penalty = 1.0
         self.model.config.eos_token_id = self.eot_token_id
@@ -85,7 +98,7 @@ class MoE_Llava_Qwen_Med(lmms):
             self._tokenizer.add_tokens([DEFAULT_IM_START_TOKEN, DEFAULT_IM_END_TOKEN], special_tokens=True)
             self._tokenizer.add_tokens([DEFAULT_VID_START_TOKEN, DEFAULT_VID_END_TOKEN], special_tokens=True)
         self.model.resize_token_embeddings(len(self._tokenizer))
-        
+
         # Load the image processor
         image_tower = self.model.get_image_tower()
         if not image_tower.is_loaded:
@@ -93,7 +106,7 @@ class MoE_Llava_Qwen_Med(lmms):
         image_tower.to(device=self._device, dtype=torch.float16)
         self._image_processor = image_tower.image_processor
 
-        self._conv_templates = conv_templates['qwen']
+        self._conv_templates = conv_templates["qwen"]
         self._max_length = self._config.max_position_embeddings
         self.model.eval()
         self.model.tie_weights()
@@ -234,22 +247,14 @@ class MoE_Llava_Qwen_Med(lmms):
 
             if len(visuals) > 1:
                 raise ValueError("Only one visual is supported for now")
-            image_tensor = self._image_processor.preprocess(
-                visuals[0], return_tensors='pt'
-            )['pixel_values'].to(self.model.device, dtype=torch.float16) 
+            image_tensor = self._image_processor.preprocess(visuals[0], return_tensors="pt")["pixel_values"].to(self.model.device, dtype=torch.float16)
 
-            
             conv = self._conv_templates.copy()
-            context = DEFAULT_IMAGE_TOKEN + '\n' + context
+            context = DEFAULT_IMAGE_TOKEN + "\n" + context
             conv.append_message(conv.roles[0], context)
             conv.append_message(conv.roles[1], None)
             prompt = conv.get_prompt()
-            input_ids = tokenizer_image_token(
-                prompt, 
-                self.tokenizer, 
-                IMAGE_TOKEN_INDEX, 
-                return_tensors='pt'
-            ).unsqueeze(0).to(self.model.device)
+            input_ids = tokenizer_image_token(prompt, self.tokenizer, IMAGE_TOKEN_INDEX, return_tensors="pt").unsqueeze(0).to(self.model.device)
 
             stop_str = conv.sep if conv.sep_style != SeparatorStyle.TWO else conv.sep2
             keywords = [stop_str]
@@ -261,16 +266,9 @@ class MoE_Llava_Qwen_Med(lmms):
 
             pad_token_id = self.tokenizer.pad_token_id if self.tokenizer.pad_token_id is not None else self.eot_token_id
 
-            cont = self.model.generate(
-                input_ids,
-                images=image_tensor,
-                pad_token_id=pad_token_id,
-                do_sample=False,
-                max_new_tokens=gen_kwargs["max_new_tokens"],
-                stopping_criteria=[stopping_criteria]
-            )
+            cont = self.model.generate(input_ids, images=image_tensor, pad_token_id=pad_token_id, do_sample=False, max_new_tokens=gen_kwargs["max_new_tokens"], stopping_criteria=[stopping_criteria])
 
-            text_outputs = self.tokenizer.decode(cont[0, input_ids.shape[1]:], skip_special_tokens=True).strip()
+            text_outputs = self.tokenizer.decode(cont[0, input_ids.shape[1] :], skip_special_tokens=True).strip()
             res.append(text_outputs)
             self.cache_hook.add_partial("generate_until", (context, gen_kwargs), text_outputs)
             pbar.update(1)

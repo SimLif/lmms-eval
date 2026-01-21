@@ -21,8 +21,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch
 import deepspeed
+import torch
 
 
 def _gather_tokens(input_, dim=0):
@@ -49,8 +49,7 @@ def _drop_tokens(input_, dim=0):
 
     total_chunks = mpu.get_tensor_model_parallel_world_size()
     this_chunk = mpu.get_tensor_model_parallel_rank()
-    assert input_.shape[
-        dim] % total_chunks == 0, f"input dimension {dim} ({input_.shape[dim]}) is not divisible by tensor parallel world size ({total_chunks})"
+    assert input_.shape[dim] % total_chunks == 0, f"input dimension {dim} ({input_.shape[dim]}) is not divisible by tensor parallel world size ({total_chunks})"
     chunk_size = input_.shape[dim] // total_chunks
 
     return torch.narrow(input_, dim, this_chunk * chunk_size, chunk_size)

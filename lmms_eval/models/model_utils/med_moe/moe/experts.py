@@ -3,12 +3,14 @@
 
 # DeepSpeed Team
 
-import torch
 import copy
+
+import torch
+
 
 class Experts(torch.nn.Module):
 
-    def __init__(self, expert,num_local_experts=1, expert_group_name=None):
+    def __init__(self, expert, num_local_experts=1, expert_group_name=None):
         super(Experts, self).__init__()
 
         # if outert_expert_mlp == None:

@@ -12,7 +12,7 @@ import unicodedata
 from typing import Collection, Dict, List, Set, Tuple, Union
 
 import tiktoken
-from transformers import PreTrainedTokenizer, AddedToken
+from transformers import AddedToken, PreTrainedTokenizer
 
 logger = logging.getLogger(__name__)
 
@@ -48,10 +48,7 @@ SPECIAL_TOKENS_SET = set(t for i, t in SPECIAL_TOKENS)
 def _load_tiktoken_bpe(tiktoken_bpe_file: str) -> Dict[bytes, int]:
     with open(tiktoken_bpe_file, "rb") as f:
         contents = f.read()
-    return {
-        base64.b64decode(token): int(rank)
-        for token, rank in (line.split() for line in contents.splitlines() if line)
-    }
+    return {base64.b64decode(token): int(rank) for token, rank in (line.split() for line in contents.splitlines() if line)}
 
 
 class QWenTokenizer(PreTrainedTokenizer):
@@ -70,13 +67,10 @@ class QWenTokenizer(PreTrainedTokenizer):
 
         # how to handle errors in decoding UTF-8 byte sequences
         # use ignore if you are in streaming inference
-        self.errors = errors  
+        self.errors = errors
 
         self.mergeable_ranks = _load_tiktoken_bpe(vocab_file)  # type: Dict[bytes, int]
-        self.special_tokens = {
-            token: index
-            for index, token in SPECIAL_TOKENS
-        }
+        self.special_tokens = {token: index for index, token in SPECIAL_TOKENS}
 
         # try load extra vocab from file
         if extra_vocab_file is not None:
@@ -87,7 +81,7 @@ class QWenTokenizer(PreTrainedTokenizer):
                     logger.info(f"extra token {token} exists, skipping")
                     continue
                 if index in used_ids:
-                    logger.info(f'the index {index} for extra token {token} exists, skipping')
+                    logger.info(f"the index {index} for extra token {token} exists, skipping")
                     continue
                 self.mergeable_ranks[token] = index
             # the index may be sparse after this, but don't worry tiktoken.Encoding will handle this
@@ -98,13 +92,9 @@ class QWenTokenizer(PreTrainedTokenizer):
             mergeable_ranks=self.mergeable_ranks,
             special_tokens=self.special_tokens,
         )
-        assert (
-            len(self.mergeable_ranks) + len(self.special_tokens) == enc.n_vocab
-        ), f"{len(self.mergeable_ranks) + len(self.special_tokens)} != {enc.n_vocab} in encoding"
+        assert len(self.mergeable_ranks) + len(self.special_tokens) == enc.n_vocab, f"{len(self.mergeable_ranks) + len(self.special_tokens)} != {enc.n_vocab} in encoding"
 
-        self.decoder = {
-            v: k for k, v in self.mergeable_ranks.items()
-        }  # type: dict[int, bytes|str]
+        self.decoder = {v: k for k, v in self.mergeable_ranks.items()}  # type: dict[int, bytes|str]
         self.decoder.update({v: k for k, v in self.special_tokens.items()})
 
         self.tokenizer = enc  # type: tiktoken.Encoding
@@ -136,9 +126,7 @@ class QWenTokenizer(PreTrainedTokenizer):
     def get_vocab(self) -> Dict[bytes, int]:
         return self.mergeable_ranks
 
-    def convert_tokens_to_ids(
-        self, tokens: Union[bytes, str, List[Union[bytes, str]]]
-    ) -> List[int]:
+    def convert_tokens_to_ids(self, tokens: Union[bytes, str, List[Union[bytes, str]]]) -> List[int]:
         ids = []
         if isinstance(tokens, (str, bytes)):
             if tokens in self.special_tokens:
@@ -205,9 +193,7 @@ class QWenTokenizer(PreTrainedTokenizer):
         text = unicodedata.normalize("NFC", text)
 
         # this implementation takes a detour: text -> token id -> token surface forms
-        for t in self.tokenizer.encode(
-            text, allowed_special=allowed_special, disallowed_special=disallowed_special
-        ):
+        for t in self.tokenizer.encode(text, allowed_special=allowed_special, disallowed_special=disallowed_special):
             tokens.append(self.decoder[t])
         return tokens
 

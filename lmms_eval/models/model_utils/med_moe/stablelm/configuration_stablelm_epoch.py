@@ -11,10 +11,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-""" StableLM Epoch model configuration"""
+"""StableLM Epoch model configuration"""
 from transformers import PretrainedConfig
 from transformers.utils import logging
-
 
 logger = logging.get_logger(__name__)
 
@@ -66,6 +65,7 @@ class StableLMEpochConfig(PretrainedConfig):
         tie_word_embeddings(`bool`, *optional*, defaults to `False`):
             Whether to tie weight embeddings
     """
+
     model_type = "stablelm_epoch"
     keys_to_ignore_at_inference = ["past_key_values"]
 

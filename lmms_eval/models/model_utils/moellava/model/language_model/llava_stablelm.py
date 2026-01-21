@@ -16,16 +16,17 @@
 from typing import List, Optional, Tuple, Union
 
 import torch
+import torch.distributed as dist
 import torch.nn as nn
-
 from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
-from .stablelm.configuration_stablelm_epoch import StableLMEpochConfig
-from .stablelm.modeling_stablelm_epoch import StableLMEpochModel, StableLMEpochForCausalLM
-
 from transformers.modeling_outputs import CausalLMOutputWithPast
 
-from ..llava_arch import LlavaMetaModel, LlavaMetaForCausalLM
-import torch.distributed as dist
+from ..llava_arch import LlavaMetaForCausalLM, LlavaMetaModel
+from .stablelm.configuration_stablelm_epoch import StableLMEpochConfig
+from .stablelm.modeling_stablelm_epoch import (
+    StableLMEpochForCausalLM,
+    StableLMEpochModel,
+)
 
 
 class LlavaStablelmConfig(StableLMEpochConfig):
@@ -73,21 +74,7 @@ class LlavaStablelmForCausalLM(StableLMEpochForCausalLM, LlavaMetaForCausalLM):
         # ipdb.set_trace()
         # print(f'rank {dist.get_rank()}', 'before prepare_inputs_labels_for_multimodal')
         if inputs_embeds is None:
-            (
-                input_ids,
-                position_ids,
-                attention_mask,
-                past_key_values,
-                inputs_embeds,
-                labels
-            ) = self.prepare_inputs_labels_for_multimodal(
-                input_ids,
-                position_ids,
-                attention_mask,
-                past_key_values,
-                labels,
-                images
-            )
+            (input_ids, position_ids, attention_mask, past_key_values, inputs_embeds, labels) = self.prepare_inputs_labels_for_multimodal(input_ids, position_ids, attention_mask, past_key_values, labels, images)
 
         # dist.barrier()
         # print(f'rank {dist.get_rank()}', 'after prepare_inputs_labels_for_multimodal')
@@ -101,23 +88,21 @@ class LlavaStablelmForCausalLM(StableLMEpochForCausalLM, LlavaMetaForCausalLM):
             use_cache=use_cache,
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
-            return_dict=return_dict
+            return_dict=return_dict,
         )
         # dist.barrier()
         # print(f'rank {dist.get_rank()}', 'after LLM')
         return out
 
-
     def prepare_inputs_for_generation(self, input_ids, past_key_values=None, inputs_embeds=None, **kwargs):
-    #     import ipdb
-    #     ipdb.set_trace()
+        #     import ipdb
+        #     ipdb.set_trace()
         images = kwargs.pop("images", None)
-        _inputs = super().prepare_inputs_for_generation(
-            input_ids, past_key_values=past_key_values, inputs_embeds=inputs_embeds, **kwargs
-        )
+        _inputs = super().prepare_inputs_for_generation(input_ids, past_key_values=past_key_values, inputs_embeds=inputs_embeds, **kwargs)
         if images is not None:
-            _inputs['images'] = images
+            _inputs["images"] = images
         return _inputs
+
 
 AutoConfig.register("llava_stablelm", LlavaStablelmConfig)
 AutoModelForCausalLM.register(LlavaStablelmConfig, LlavaStablelmForCausalLM)

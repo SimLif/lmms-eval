@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-import json
 import argparse
+import json
+
 
 def get_metric(results, task_name, metric_key):
     """
@@ -9,6 +10,7 @@ def get_metric(results, task_name, metric_key):
     """
     task_data = results.get(task_name, {})
     return task_data.get(metric_key, -1)
+
 
 def main(json_file=None):
     if json_file is None:
@@ -30,9 +32,9 @@ def main(json_file=None):
     output = []
     # suffix = "_r1"
     suffix = ""
-    
+
     # 1. vqa_rad_open: (recall_old, recall, precision, f1, bleu)
-    task = "vqa_rad_open"+suffix
+    task = "vqa_rad_open" + suffix
     output.append(get_metric(results, task, "recall_old,none"))
     output.append(get_metric(results, task, "recall,none"))
     output.append(get_metric(results, task, "precision,none"))
@@ -40,11 +42,11 @@ def main(json_file=None):
     output.append(get_metric(results, task, "bleu,none"))
 
     # 2. vqa_rad_closed: (acc 即 accuracy)
-    task = "vqa_rad_closed"+suffix
+    task = "vqa_rad_closed" + suffix
     output.append(get_metric(results, task, "accuracy,none"))
 
     # 3. slake_open: (recall_old, recall, precision, f1, bleu)
-    task = "slake_open"+suffix
+    task = "slake_open" + suffix
     output.append(get_metric(results, task, "recall_old,none"))
     output.append(get_metric(results, task, "recall,none"))
     output.append(get_metric(results, task, "precision,none"))
@@ -52,11 +54,11 @@ def main(json_file=None):
     output.append(get_metric(results, task, "bleu,none"))
 
     # 4. slake_closed: (acc)
-    task = "slake_closed"+suffix
+    task = "slake_closed" + suffix
     output.append(get_metric(results, task, "accuracy,none"))
 
     # 5. path_vqa_open: (recall_old, recall, precision, f1, bleu)
-    task = "path_vqa_open"+suffix
+    task = "path_vqa_open" + suffix
     output.append(get_metric(results, task, "recall_old,none"))
     output.append(get_metric(results, task, "recall,none"))
     output.append(get_metric(results, task, "precision,none"))
@@ -64,11 +66,11 @@ def main(json_file=None):
     output.append(get_metric(results, task, "bleu,none"))
 
     # 6. path_vqa_closed: (acc)
-    task = "path_vqa_closed"+suffix
+    task = "path_vqa_closed" + suffix
     output.append(get_metric(results, task, "accuracy,none"))
 
     # 7. vqa_med_open: (从 vqa_med 中取 open 指标：recall_old, recall, precision, f1, bleu)
-    task = "vqa_med"+suffix
+    task = "vqa_med" + suffix
     output.append(get_metric(results, task, "recall_old,none"))
     output.append(get_metric(results, task, "recall,none"))
     output.append(get_metric(results, task, "precision,none"))
@@ -79,15 +81,16 @@ def main(json_file=None):
     # output.append(get_metric(results, task, "accuracy,none"))
 
     # 9. pmc_vqa: (acc)
-    task = "pmc_vqa"+suffix
+    task = "pmc_vqa" + suffix
     output.append(get_metric(results, task, "accuracy,none"))
 
     # 10. omni_med_vqa_mini: (acc)
-    task = "omni_med_vqa_mini"+suffix
+    task = "omni_med_vqa_mini" + suffix
     output.append(get_metric(results, task, "accuracy,none"))
 
     # 输出结果，使用 tab 键分隔，方便复制到 Excel 中
     print("\t".join(str(v) for v in output))
+
 
 if __name__ == "__main__":
     main()

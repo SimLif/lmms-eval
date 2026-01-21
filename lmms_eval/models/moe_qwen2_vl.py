@@ -16,7 +16,9 @@ from lmms_eval.api.instance import Instance
 from lmms_eval.api.model import lmms
 from lmms_eval.api.registry import register_model
 from lmms_eval.models.model_utils.load_video import load_video_decord
-from lmms_eval.models.model_utils.moellava.model.multimodal_model.qwen2_vl_moe import EvalMoEQwen2VLForConditionalGeneration
+from lmms_eval.models.model_utils.moellava.model.multimodal_model.qwen2_vl_moe import (
+    EvalMoEQwen2VLForConditionalGeneration,
+)
 
 try:
     from qwen_vl_utils import process_vision_info
@@ -62,12 +64,13 @@ class MoE_Qwen2_VL(lmms):
         if use_flash_attention_2:
             raise NotImplementedError("Flash Attention 2 is not implemented for MoE_Qwen2_VL")
         else:
-            if '@' in pretrained:
-                base_pretrained, lora_pretrained = pretrained.split('@')
+            if "@" in pretrained:
+                base_pretrained, lora_pretrained = pretrained.split("@")
                 model = EvalMoEQwen2VLForConditionalGeneration.from_pretrained(base_pretrained, torch_dtype="auto", device_map=self.device_map)
                 from peft import PeftModel
+
                 self._model = PeftModel.from_pretrained(model, lora_pretrained, device=self.device_map).eval()
-                print('----- Model Structure -----')
+                print("----- Model Structure -----")
                 print(self._model)
                 pretrained = lora_pretrained
             else:

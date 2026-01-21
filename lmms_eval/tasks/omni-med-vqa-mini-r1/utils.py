@@ -1,18 +1,19 @@
 import datetime
 import json
 import os
-import re
-from collections import defaultdict
 import random
+import re
+import sys
+from collections import defaultdict
 
 import numpy as np
 from loguru import logger as eval_logger
 
-import sys
 dir_name = os.path.dirname(os.path.abspath(__file__))
 
 
 from lmms_eval.tasks.vqa_rad.metrics import calculate_exactmatch, calculate_f1score
+
 
 # modified based on https://github.com/MMMU-Benchmark/MMMU/blob/main/eval/utils/eval_utils.py
 # ----------- Process Multi-choice -------------
@@ -21,7 +22,7 @@ def parse_multi_choice_response(response, all_choices, index2ans, random_seed):
     Parse the prediction from the generated response.
     Return the predicted index e.g., A, B, C, D.
     """
-        
+
     content_match = re.search(r"<answer>(.*?)</answer>", response)
     answer = content_match.group(1).strip() if content_match else response.strip()
 
@@ -45,15 +46,15 @@ def omni_med_vqa_mini_process_results(doc, results):
     all_choices = []
     index2ans = {}
 
-    for key in ['option_A', 'option_B', 'option_C', 'option_D']:
+    for key in ["option_A", "option_B", "option_C", "option_D"]:
         if doc[key]:
             all_choices.append(key[-1])
             index2ans[key[-1]] = doc[key]
-    
+
     pred = results[0]
     gt_label = doc["label"]
-    
+
     pred_label = parse_multi_choice_response(pred, all_choices, index2ans, random_seed=0)
     acc = 100 if str(pred_label) == str(gt_label) else 0
 
-    return {'accuracy': acc}
+    return {"accuracy": acc}

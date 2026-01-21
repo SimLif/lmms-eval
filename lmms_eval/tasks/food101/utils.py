@@ -1,6 +1,7 @@
 def food101_doc_to_visual(doc):
     return [doc["image"].convert("RGB")]
 
+
 def food101_doc_to_text(doc, lmms_eval_specific_kwargs=None):
     question = doc["input"].strip()
     return question

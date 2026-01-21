@@ -15,27 +15,26 @@ The file has been adapted from two fairscale files:
 # This source code is licensed under the BSD license found in the
 # LICENSE file in the root directory of this source tree.
 
-from deepspeed.utils.timer import SynchronizedWallClockTimer
-from deepspeed.utils import logger
-from deepspeed.utils.bwc import bwc_tensor_model_parallel_world_size
-from typing import Callable, Dict, TYPE_CHECKING, Any, Optional, Tuple, Union, List
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Union
 
 import torch
+import torch.nn.functional as F
+from deepspeed.moe.mappings import drop_tokens, gather_tokens
+from deepspeed.utils import groups, logger
+from deepspeed.utils.bwc import bwc_tensor_model_parallel_world_size
+from deepspeed.utils.timer import SynchronizedWallClockTimer
 from torch import Tensor
 from torch.nn import Module
-import torch.nn.functional as F
-from deepspeed.utils import groups
-from deepspeed.moe.mappings import drop_tokens, gather_tokens
 
 if TYPE_CHECKING:
     Base = Module[Tensor]
 else:
     Base = Module
 
-TOPK_GATE_TIMER = 'topk_gate'
-MOE_TIMER = 'moe'
-FIRST_ALLTOALL_TIMER = '1st_a2a'
-SECOND_ALLTOALL_TIMER = '2nd_a2a'
+TOPK_GATE_TIMER = "topk_gate"
+MOE_TIMER = "moe"
+FIRST_ALLTOALL_TIMER = "1st_a2a"
+SECOND_ALLTOALL_TIMER = "2nd_a2a"
 
 uniform_map: Dict[torch.device, Callable] = {}
 gumbel_map: Dict[torch.device, Callable] = {}
@@ -45,6 +44,7 @@ try:
     # To enable Tutel MoE optimizations:
     #   python3 -m pip install --user --upgrade git+https://github.com/deepspeedai/tutel@v0.1.x
     from tutel import moe as tutel_moe
+
     TUTEL_INSTALLED = True
 except:
     # Fail silently so we don't spam logs unnecessarily if user isn't using tutel
@@ -69,9 +69,7 @@ def multiplicative_jitter(x, device: torch.device, epsilon=1e-2):
         return x
     uniform = uniform_map.get(device)
     if uniform is None:
-        uniform = torch.distributions.uniform.Uniform(low=torch.tensor(1.0 - epsilon, device=device),
-                                                      high=torch.tensor(1.0 + epsilon,
-                                                                        device=device)).rsample  # type: ignore
+        uniform = torch.distributions.uniform.Uniform(low=torch.tensor(1.0 - epsilon, device=device), high=torch.tensor(1.0 + epsilon, device=device)).rsample  # type: ignore
         uniform_map[device] = uniform
     return x * uniform(x.shape)
 
@@ -118,23 +116,23 @@ USE_EINSUM = True
 def einsum(rule, a, b):
     if USE_EINSUM:
         return torch.einsum(rule, a, b)
-    elif rule == 's,se->se':
+    elif rule == "s,se->se":
         return a.reshape(a.shape[0], -1) * b
-    elif rule == 'se,sc->sec':
+    elif rule == "se,sc->sec":
         return a.unsqueeze(2) * b.unsqueeze(1)
-    elif rule == 'se,se->s':
+    elif rule == "se,se->s":
         return torch.bmm(a.unsqueeze(1), b.unsqueeze(2)).reshape(-1)
-    elif rule == 'se,sec->sec':
+    elif rule == "se,sec->sec":
         return a.unsqueeze(2) * b
-    elif rule == 'sec,sm->ecm':
+    elif rule == "sec,sm->ecm":
         s = a.shape[0]
         e = a.shape[1]
         c = a.shape[2]
         m = b.shape[1]
         return torch.matmul(a.reshape(s, -1).t(), b).reshape(e, c, m)
-    elif rule == 'sec,ecm->sm':
+    elif rule == "sec,ecm->sm":
         return torch.matmul(a.reshape(a.shape[0], -1), b.reshape(-1, b.shape[-1]))
-    elif rule == 'ks,ksm->sm':
+    elif rule == "ks,ksm->sm":
         k = b.shape[0]
         s = b.shape[1]
         m = b.shape[2]
@@ -181,14 +179,7 @@ def _one_hot_to_float(x, num_classes):
 
 
 def topkgating(
-    logits: Tensor,
-    k: int,
-    capacity_factor: float,
-    min_capacity: int,
-    drop_tokens: bool = True,
-    ep_group: Union[torch.distributed.ProcessGroup, None] = None,
-    drop_policy: str = "probs",
-    expert_cluster_mask_list: List[Tensor] = None
+    logits: Tensor, k: int, capacity_factor: float, min_capacity: int, drop_tokens: bool = True, ep_group: Union[torch.distributed.ProcessGroup, None] = None, drop_policy: str = "probs", expert_cluster_mask_list: List[Tensor] = None
 ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
     """Implements TopKGating on logits."""
 
@@ -205,7 +196,7 @@ def topkgating(
     # Create the initial boolean mask for active experts
     # mask = torch.zeros_like(gates, dtype=torch.bool).scatter_(1, top_idx, 1)
     mask = torch.zeros_like(logits, dtype=torch.bool, device=device)
-    mask.scatter_(1, top_idx, True) # Shape [N, num_experts]
+    mask.scatter_(1, top_idx, True)  # Shape [N, num_experts]
 
     if expert_cluster_mask_list is not None:
         for expert_cluster_mask in expert_cluster_mask_list:
@@ -218,7 +209,7 @@ def topkgating(
                 mask[triggered_tokens, :] = mask[triggered_tokens, :] | expert_cluster_mask
     # topk_masked_gates = torch.zeros_like(logits).scatter(1, top_idx, top_gate)
     topk_masked_gates = torch.where(mask, logits, 0)
-    
+
     exp_counts = torch.sum(mask, dim=0).detach().to(logits.device)
 
     # Compute l_aux
@@ -231,7 +222,7 @@ def topkgating(
         capacity = _capacity(gates, torch.tensor(capacity_factor * k), torch.tensor(min_capacity))
         # update mask and locations by capacity
 
-        if drop_policy == 'probs':
+        if drop_policy == "probs":
             capacity_probs, capacity_indices = torch.topk(topk_masked_gates, k=capacity, dim=0, sorted=False)
             capacity_mask = torch.zeros_like(logits).scatter(0, capacity_indices, 1)
             mask = torch.logical_and(mask, capacity_mask)
@@ -289,19 +280,21 @@ class TopKGateDynamic(Module):
 
     wg: torch.nn.Linear
 
-    def __init__(self,
-                 model_dim: int,
-                 num_experts: int,
-                 k: int = 1,
-                 capacity_factor: float = 1.0,
-                 eval_capacity_factor: float = 1.0,
-                 min_capacity: int = 8,
-                 noisy_gate_policy: Optional[str] = None,
-                 drop_tokens: bool = True,
-                 use_rts: bool = True,
-                 ep_group: Union[torch.distributed.ProcessGroup, None] = None,
-                 top2_2nd_expert_sampling: bool = True,
-                 expert_cluster_mask_list: List[Tensor] = None,) -> None:
+    def __init__(
+        self,
+        model_dim: int,
+        num_experts: int,
+        k: int = 1,
+        capacity_factor: float = 1.0,
+        eval_capacity_factor: float = 1.0,
+        min_capacity: int = 8,
+        noisy_gate_policy: Optional[str] = None,
+        drop_tokens: bool = True,
+        use_rts: bool = True,
+        ep_group: Union[torch.distributed.ProcessGroup, None] = None,
+        top2_2nd_expert_sampling: bool = True,
+        expert_cluster_mask_list: List[Tensor] = None,
+    ) -> None:
         super().__init__()
 
         self.wg = torch.nn.Linear(model_dim, num_experts, bias=False)
@@ -320,31 +313,24 @@ class TopKGateDynamic(Module):
         self.expert_cluster_idx_list = expert_cluster_mask_list
 
     def _set_ep_group(self, ep_group):
-        assert self.ep_group is None, f'Attempting to override an existing ep_group'
+        assert self.ep_group is None, f"Attempting to override an existing ep_group"
         self.ep_group = ep_group
 
-    def forward(self,
-                input: torch.Tensor,
-                used_token: torch.Tensor = None,
-                use_tutel: bool = False) -> Tuple[Tensor, Tensor, Tensor]:  # type: ignore
+    def forward(self, input: torch.Tensor, used_token: torch.Tensor = None, use_tutel: bool = False) -> Tuple[Tensor, Tensor, Tensor]:  # type: ignore
 
         if self.wall_clock_breakdown:
             self.timers(TOPK_GATE_TIMER).start()
 
         input_fp32 = input.float()
         # input jittering
-        if self.noisy_gate_policy == 'Jitter' and self.training:
+        if self.noisy_gate_policy == "Jitter" and self.training:
             input_fp32 = multiplicative_jitter(input_fp32, device=input.device)
         logits = torch.nn.functional.linear(input_fp32, weight=self.wg.weight.float(), bias=None)
 
-
-        gate_output = topkgating(logits, self.k,
-                                    self.capacity_factor if self.training else self.eval_capacity_factor,
-                                    self.min_capacity, self.drop_tokens, self.ep_group, expert_cluster_mask_list=self.expert_cluster_idx_list)
+        gate_output = topkgating(logits, self.k, self.capacity_factor if self.training else self.eval_capacity_factor, self.min_capacity, self.drop_tokens, self.ep_group, expert_cluster_mask_list=self.expert_cluster_idx_list)
 
         if self.wall_clock_breakdown:
             self.timers(TOPK_GATE_TIMER).stop()
             self.gate_time = self.timers(TOPK_GATE_TIMER).elapsed(reset=False)
 
         return gate_output
-

@@ -11,8 +11,8 @@ import unicodedata
 from typing import Collection, Dict, List, Set, Tuple, Union
 
 import tiktoken
+from transformers import AddedToken, PreTrainedTokenizer
 from transformers.utils import logging
-from transformers import PreTrainedTokenizer, AddedToken
 
 logger = logging.get_logger(__name__)
 
@@ -23,10 +23,7 @@ NAME = "arcade100k"
 def _load_tiktoken_bpe(tiktoken_bpe_file: str) -> Dict[bytes, int]:
     with open(tiktoken_bpe_file, "rb") as f:
         contents = f.read()
-    return {
-        base64.b64decode(token): int(rank)
-        for token, rank in (line.split() for line in contents.splitlines() if line)
-    }
+    return {base64.b64decode(token): int(rank) for token, rank in (line.split() for line in contents.splitlines() if line)}
 
 
 ENDOFTEXT = "<|endoftext|>"
@@ -58,20 +55,9 @@ CHAT = [
     "<|im_end|>",  # Chat: Input message end
 ]
 PAUSE = "<|pause|>"  # Think before you speak (https://arxiv.org/abs/2310.02226)
-REGISTERS = [
-    f"<|reg{i}|>" for i in range(0, 8)
-]  # Register 0 sink token (https://arxiv.org/abs/2309.17453)
+REGISTERS = [f"<|reg{i}|>" for i in range(0, 8)]  # Register 0 sink token (https://arxiv.org/abs/2309.17453)
 ENDOFPROMPT = "<|endofprompt|>"
-SPECIAL_TOKENS_NAMES = (
-    [ENDOFTEXT]
-    + FIM
-    + CODE
-    + [ENDOFPROMPT]
-    + CHAT
-    + [PAUSE]
-    + REGISTERS
-    + ["<|extra0|>"]
-)
+SPECIAL_TOKENS_NAMES = [ENDOFTEXT] + FIM + CODE + [ENDOFPROMPT] + CHAT + [PAUSE] + REGISTERS + ["<|extra0|>"]
 START_ID = 100257
 SPECIAL_TOKENS = {t: START_ID + i for i, t in enumerate(SPECIAL_TOKENS_NAMES)}
 
@@ -115,12 +101,7 @@ class Arcade100kTokenizer(PreTrainedTokenizer):
         self.tokenizer = tiktoken.Encoding(**self._tiktoken_config)
 
         # TODO: Remove this assertion
-        assert (
-            len(self.tokenizer._mergeable_ranks)
-            + len(self.tokenizer._special_tokens)
-            + 1
-            == self.tokenizer.n_vocab
-        ), f"{len(self.tokenizer._mergeable_ranks) + len(self.tokenizer._special_tokens)} != {self.tokenizer.n_vocab} in encoding"
+        assert len(self.tokenizer._mergeable_ranks) + len(self.tokenizer._special_tokens) + 1 == self.tokenizer.n_vocab, f"{len(self.tokenizer._mergeable_ranks) + len(self.tokenizer._special_tokens)} != {self.tokenizer.n_vocab} in encoding"
 
         self.decoder = {i: n for n, i in self.tokenizer._mergeable_ranks.items()}
         self.decoder.update({i: n for n, i in self.tokenizer._special_tokens.items()})
@@ -140,9 +121,7 @@ class Arcade100kTokenizer(PreTrainedTokenizer):
     def get_vocab(self) -> Dict[bytes, int]:
         return self.tokenizer._mergeable_ranks
 
-    def convert_tokens_to_ids(
-        self, tokens: Union[bytes, str, List[Union[bytes, str]]]
-    ) -> List[int]:
+    def convert_tokens_to_ids(self, tokens: Union[bytes, str, List[Union[bytes, str]]]) -> List[int]:
         ids = []
         if isinstance(tokens, (str, bytes)):
             if tokens in self.tokenizer._special_tokens:
@@ -213,9 +192,7 @@ class Arcade100kTokenizer(PreTrainedTokenizer):
         text = unicodedata.normalize("NFC", text)
 
         # this implementation takes a detour: text -> token id -> token surface forms
-        for t in self.tokenizer.encode(
-            text, allowed_special=allowed_special, disallowed_special=disallowed_special
-        ):
+        for t in self.tokenizer.encode(text, allowed_special=allowed_special, disallowed_special=disallowed_special):
             tokens.append(self.decoder[t])
         return tokens
 

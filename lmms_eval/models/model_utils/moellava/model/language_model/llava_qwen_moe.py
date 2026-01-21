@@ -15,20 +15,28 @@ from dataclasses import dataclass
 from typing import List, Optional, Tuple, Union
 
 import torch
-import torch.nn as nn
-from torch.nn import CrossEntropyLoss
-
-from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
-from .qwen.modeling_qwen import QWenLMHeadModel, QWenModel, _import_flash_attn, SUPPORT_BF16, SUPPORT_FP16, \
-    SUPPORT_CUDA, logger
-from .qwen.configuration_qwen import QWenConfig
-
-from transformers.modeling_outputs import CausalLMOutputWithPast, BaseModelOutputWithPast
-from deepspeed.moe.layer import MoE
-from .qwen.tokenization_qwen import QWenTokenizer
-from ..llava_arch import LlavaMetaModel, LlavaQWenMetaForCausalLM
 import torch.distributed as dist
+import torch.nn as nn
+from deepspeed.moe.layer import MoE
+from torch.nn import CrossEntropyLoss
+from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
+from transformers.modeling_outputs import (
+    BaseModelOutputWithPast,
+    CausalLMOutputWithPast,
+)
 
+from ..llava_arch import LlavaMetaModel, LlavaQWenMetaForCausalLM
+from .qwen.configuration_qwen import QWenConfig
+from .qwen.modeling_qwen import (
+    SUPPORT_BF16,
+    SUPPORT_CUDA,
+    SUPPORT_FP16,
+    QWenLMHeadModel,
+    QWenModel,
+    _import_flash_attn,
+    logger,
+)
+from .qwen.tokenization_qwen import QWenTokenizer
 
 local_rank = None
 
@@ -40,18 +48,8 @@ def rank0_print(*args):
 
 class MoELLaVAQWenConfig(QWenConfig):
     model_type = "moe_llava_qwen"
-    def __init__(self,
-                 moe_enable=True,
-                 moe_mode='sparse',
-                 moe_layers_idx=None,
-                 ep_size=1,
-                 top_k_experts=2,
-                 capacity_factor=1.,
-                 eval_capacity_factor=1.,
-                 min_capacity=4,
-                 use_residual=False,
-                 router_aux_loss_coef=0.01,
-                 **kwargs):
+
+    def __init__(self, moe_enable=True, moe_mode="sparse", moe_layers_idx=None, ep_size=1, top_k_experts=2, capacity_factor=1.0, eval_capacity_factor=1.0, min_capacity=4, use_residual=False, router_aux_loss_coef=0.01, **kwargs):
         self.moe = dict(
             moe_enable=moe_enable,
             moe_mode=moe_mode,
@@ -66,10 +64,11 @@ class MoELLaVAQWenConfig(QWenConfig):
             train_modules=[
                 # 'mlp.w1', 'mlp.w2', 'mlp.c_proj', 'wg',
                 # 'wte', 'lm_head'
-            ]
+            ],
         )
 
         super(MoELLaVAQWenConfig, self).__init__(**kwargs)
+
 
 class MoELLaVAQWenModel(LlavaMetaModel, QWenModel):
     config_class = MoELLaVAQWenConfig
@@ -79,6 +78,7 @@ class MoELLaVAQWenModel(LlavaMetaModel, QWenModel):
 
     def embed_tokens(self, input_ids):
         return self.wte(input_ids)
+
 
 @dataclass
 class MoEBaseModelOutputWithPast(BaseModelOutputWithPast):
@@ -98,8 +98,6 @@ class MoECausalLMOutputWithPast(CausalLMOutputWithPast):
     hidden_states: Optional[Tuple[torch.FloatTensor]] = None
     attentions: Optional[Tuple[torch.FloatTensor]] = None
     moe_loss_list: Optional[Tuple[torch.FloatTensor]] = None
-
-
 
 
 def MoEQWenBlock_forward(self):
@@ -155,9 +153,6 @@ def MoEQWenBlock_forward(self):
     return forward
 
 
-
-
-
 def MoEQWenModel_forward(self):
     def forward(
         # self,
@@ -176,25 +171,13 @@ def MoEQWenModel_forward(self):
         return_dict: Optional[bool] = None,
         output_moe_loss: Optional[bool] = True,
     ):
-        output_attentions = (
-            output_attentions
-            if output_attentions is not None
-            else self.config.output_attentions
-        )
-        output_hidden_states = (
-            output_hidden_states
-            if output_hidden_states is not None
-            else self.config.output_hidden_states
-        )
+        output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
+        output_hidden_states = output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
         use_cache = use_cache if use_cache is not None else self.config.use_cache
-        return_dict = (
-            return_dict if return_dict is not None else self.config.use_return_dict
-        )
+        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
         if input_ids is not None and inputs_embeds is not None:
-            raise ValueError(
-                "You cannot specify both input_ids and inputs_embeds at the same time"
-            )
+            raise ValueError("You cannot specify both input_ids and inputs_embeds at the same time")
         elif input_ids is not None:
             input_shape = input_ids.size()
             input_ids = input_ids.view(-1, input_shape[-1])
@@ -268,18 +251,14 @@ def MoEQWenModel_forward(self):
                 ntk_alpha = self.get_ntk_alpha(kv_seq_len)
                 ntk_alpha_list.append(ntk_alpha)
         self.rotary_emb._ntk_alpha_cached_list = ntk_alpha_list
-        rotary_pos_emb_list = [
-            self.rotary_emb(kv_seq_len, ntk_alpha=ntk_alpha) for ntk_alpha in ntk_alpha_list
-        ]
+        rotary_pos_emb_list = [self.rotary_emb(kv_seq_len, ntk_alpha=ntk_alpha) for ntk_alpha in ntk_alpha_list]
 
         hidden_states = self.drop(hidden_states)
         output_shape = input_shape + (hidden_states.size(-1),)
 
         if self.gradient_checkpointing and self.training:
             if use_cache:
-                logger.warning_once(
-                    "`use_cache=True` is incompatible with gradient checkpointing. Setting `use_cache=False`..."
-                )
+                logger.warning_once("`use_cache=True` is incompatible with gradient checkpointing. Setting `use_cache=False`...")
                 use_cache = False
 
         presents = () if use_cache else None
@@ -341,9 +320,7 @@ def MoEQWenModel_forward(self):
             all_hidden_states = all_hidden_states + (hidden_states,)
 
         if not return_dict:
-            return tuple(
-                v for v in [hidden_states, presents, all_hidden_states, all_moe_loss] if v is not None
-            )
+            return tuple(v for v in [hidden_states, presents, all_hidden_states, all_moe_loss] if v is not None)
 
         return MoEBaseModelOutputWithPast(
             last_hidden_state=hidden_states,
@@ -356,9 +333,6 @@ def MoEQWenModel_forward(self):
     return forward
 
 
-
-
-
 class MoELLaVAQWenForCausalLM(QWenLMHeadModel, LlavaQWenMetaForCausalLM):
     config_class = MoELLaVAQWenConfig
 
@@ -366,42 +340,30 @@ class MoELLaVAQWenForCausalLM(QWenLMHeadModel, LlavaQWenMetaForCausalLM):
         super(QWenLMHeadModel, self).__init__(config)
         # import ipdb
         # ipdb.set_trace()
-        assert (
-                config.bf16 + config.fp16 + config.fp32 <= 1
-        ), "Only one of \"bf16\", \"fp16\", \"fp32\" can be true"
+        assert config.bf16 + config.fp16 + config.fp32 <= 1, 'Only one of "bf16", "fp16", "fp32" can be true'
 
         # autoset_precision = config.bf16 + config.fp16 + config.fp32 == 0
         autoset_precision = True
 
         if autoset_precision:
             if SUPPORT_BF16:
-                logger.warn(
-                    "The model is automatically converting to bf16 for faster inference. "
-                    "If you want to disable the automatic precision, please manually add bf16/fp16/fp32=True to \"AutoModelForCausalLM.from_pretrained\"."
-                )
+                logger.warn("The model is automatically converting to bf16 for faster inference. " 'If you want to disable the automatic precision, please manually add bf16/fp16/fp32=True to "AutoModelForCausalLM.from_pretrained".')
                 config.bf16 = True
             elif SUPPORT_FP16:
-                logger.warn(
-                    "The model is automatically converting to fp16 for faster inference. "
-                    "If you want to disable the automatic precision, please manually add bf16/fp16/fp32=True to \"AutoModelForCausalLM.from_pretrained\"."
-                )
+                logger.warn("The model is automatically converting to fp16 for faster inference. " 'If you want to disable the automatic precision, please manually add bf16/fp16/fp32=True to "AutoModelForCausalLM.from_pretrained".')
                 config.fp16 = True
             else:
                 config.fp32 = True
 
         if config.bf16 and SUPPORT_CUDA and not SUPPORT_BF16:
-            logger.warn(
-                "Your device does NOT seem to support bf16, you can switch to fp16 or fp32 by by passing fp16/fp32=True in \"AutoModelForCausalLM.from_pretrained\".")
+            logger.warn('Your device does NOT seem to support bf16, you can switch to fp16 or fp32 by by passing fp16/fp32=True in "AutoModelForCausalLM.from_pretrained".')
         if config.fp16 and SUPPORT_CUDA and not SUPPORT_FP16:
-            logger.warn(
-                "Your device does NOT support faster inference with fp16, please switch to fp32 which is likely to be faster")
+            logger.warn("Your device does NOT support faster inference with fp16, please switch to fp32 which is likely to be faster")
         if config.fp32:
             if SUPPORT_BF16:
-                logger.warn(
-                    "Your device support faster inference by passing bf16=True in \"AutoModelForCausalLM.from_pretrained\".")
+                logger.warn('Your device support faster inference by passing bf16=True in "AutoModelForCausalLM.from_pretrained".')
             elif SUPPORT_FP16:
-                logger.warn(
-                    "Your device support faster inference by passing fp16=True in \"AutoModelForCausalLM.from_pretrained\".")
+                logger.warn('Your device support faster inference by passing fp16=True in "AutoModelForCausalLM.from_pretrained".')
 
         if config.use_flash_attn == "auto":
             # if config.bf16 or config.fp16:
@@ -453,21 +415,7 @@ class MoELLaVAQWenForCausalLM(QWenLMHeadModel, LlavaQWenMetaForCausalLM):
         # ipdb.set_trace()
         # print(f'rank {dist.get_rank()}', 'before prepare_inputs_labels_for_multimodal')
         if inputs_embeds is None:
-            (
-                input_ids,
-                position_ids,
-                attention_mask,
-                past_key_values,
-                inputs_embeds,
-                labels
-            ) = self.prepare_inputs_labels_for_multimodal(
-                input_ids,
-                position_ids,
-                attention_mask,
-                past_key_values,
-                labels,
-                images
-            )
+            (input_ids, position_ids, attention_mask, past_key_values, inputs_embeds, labels) = self.prepare_inputs_labels_for_multimodal(input_ids, position_ids, attention_mask, past_key_values, labels, images)
 
         # dist.barrier()
         # print(f'rank {dist.get_rank()}', 'after prepare_inputs_labels_for_multimodal')
@@ -501,9 +449,7 @@ class MoELLaVAQWenForCausalLM(QWenLMHeadModel, LlavaQWenMetaForCausalLM):
             shift_logits = lm_logits[..., :-1, :].contiguous()
             shift_labels = labels[..., 1:].contiguous()
             loss_fct = CrossEntropyLoss()
-            loss = loss_fct(
-                shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1)
-            )
+            loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
 
         moe_loss, moe_losses = None, []
         if len(transformer_outputs[-1]) > 0:
@@ -535,59 +481,57 @@ class MoELLaVAQWenForCausalLM(QWenLMHeadModel, LlavaQWenMetaForCausalLM):
 
     def prepare_inputs_for_generation(self, input_ids, past_key_values=None, inputs_embeds=None, **kwargs):
         images = kwargs.pop("images", None)
-        _inputs = super().prepare_inputs_for_generation(
-            input_ids, past_key_values=past_key_values, inputs_embeds=inputs_embeds, **kwargs
-        )
+        _inputs = super().prepare_inputs_for_generation(input_ids, past_key_values=past_key_values, inputs_embeds=inputs_embeds, **kwargs)
         if images is not None:
-            _inputs['images'] = images
+            _inputs["images"] = images
         return _inputs
 
     def initialize_moe_modules(self, model_args):
 
-        self.config.moe['moe_enable'] = model_args.moe_enable
-        self.config.moe['train_modules'] = model_args.train_modules
-        self.config.moe['moe_mode'] = model_args.moe_mode
-        self.config.moe['moe_layers_idx'] = model_args.moe_layers_idx
-        self.config.moe['ep_size']= model_args.ep_size
-        self.config.moe['top_k_experts'] = model_args.top_k_experts
-        self.config.moe['capacity_factor'] = model_args.capacity_factor
-        self.config.moe['eval_capacity_factor'] = model_args.eval_capacity_factor
-        self.config.moe['min_capacity'] = model_args.min_capacity
-        self.config.moe['use_residual'] = model_args.use_residual
-        self.config.moe['router_aux_loss_coef'] = self.router_aux_loss_coef = model_args.router_aux_loss_coef
+        self.config.moe["moe_enable"] = model_args.moe_enable
+        self.config.moe["train_modules"] = model_args.train_modules
+        self.config.moe["moe_mode"] = model_args.moe_mode
+        self.config.moe["moe_layers_idx"] = model_args.moe_layers_idx
+        self.config.moe["ep_size"] = model_args.ep_size
+        self.config.moe["top_k_experts"] = model_args.top_k_experts
+        self.config.moe["capacity_factor"] = model_args.capacity_factor
+        self.config.moe["eval_capacity_factor"] = model_args.eval_capacity_factor
+        self.config.moe["min_capacity"] = model_args.min_capacity
+        self.config.moe["use_residual"] = model_args.use_residual
+        self.config.moe["router_aux_loss_coef"] = self.router_aux_loss_coef = model_args.router_aux_loss_coef
         # self.config.moe['train_modules'] = [
         #         # 'mlp.w1', 'mlp.w2', 'mlp.c_proj', 'wg',
         #         # 'wte', 'lm_head'
         #     ]
-        if self.config.moe['train_modules'] is not None and len(self.config.moe['train_modules']) > 0:
+        if self.config.moe["train_modules"] is not None and len(self.config.moe["train_modules"]) > 0:
             # First, freeze all parameters
             for n, p in self.named_parameters():
                 p.requires_grad = False
-            
+
             # Then, selectively unfreeze parameters based on train_modules
             for n, p in self.named_parameters():
-                for module in self.config.moe['train_modules']:
+                for module in self.config.moe["train_modules"]:
                     # Handle MoE expert parameters
-                    if 'deepspeed_moe.experts.deepspeed_experts' in n:
-                        if module in ['mlp.w1', 'mlp.w2', 'mlp.c_proj'] and module.split('.')[-1] in n:
+                    if "deepspeed_moe.experts.deepspeed_experts" in n:
+                        if module in ["mlp.w1", "mlp.w2", "mlp.c_proj"] and module.split(".")[-1] in n:
                             p.requires_grad = True
                             break
                     # Handle MoE gate parameters
-                    elif 'deepspeed_moe.gate' in n and module == 'wg' and 'wg' in n:
+                    elif "deepspeed_moe.gate" in n and module == "wg" and "wg" in n:
                         p.requires_grad = True
                         break
                     # Handle regular parameters
                     elif module in n:
                         p.requires_grad = True
                         break
-            
+
             # Validate and print trainable parameters
             moe_trainable_params = []
             non_moe_trainable_params = []
 
             for n, p in self.named_parameters():
                 if p.requires_grad:
-                    if 'deepspeed_moe' in n:
+                    if "deepspeed_moe" in n:
                         moe_trainable_params.append(n)
                     else:
                         non_moe_trainable_params.append(n)
@@ -615,7 +559,7 @@ class MoELLaVAQWenForCausalLM(QWenLMHeadModel, LlavaQWenMetaForCausalLM):
 
         moe_layers_idx = model_args.moe_layers_idx
         if model_args.moe_layers_idx is not None:
-            model_args.moe_mode = 'custom'
+            model_args.moe_mode = "custom"
             assert len(model_args.moe_layers_idx) <= num_layers
             assert max(model_args.moe_layers_idx) < num_layers
             assert min(model_args.moe_layers_idx) >= 0
@@ -629,15 +573,14 @@ class MoELLaVAQWenForCausalLM(QWenLMHeadModel, LlavaQWenMetaForCausalLM):
             elif model_args.moe_mode == "dense":
                 moe_layers_idx = list(range(num_layers))
             else:
-                raise NotImplementedError(
-                    f'Only support ["first_half", "second_half", "sparse", "dense"], but found {model_args.moe_mode}')
+                raise NotImplementedError(f'Only support ["first_half", "second_half", "sparse", "dense"], but found {model_args.moe_mode}')
 
-        self.config.moe['moe_layers_idx'] = moe_layers_idx
+        self.config.moe["moe_layers_idx"] = moe_layers_idx
         if len(model_args.num_experts) == 1:
-            self.config.moe['num_experts'] = model_args.num_experts * len(moe_layers_idx)
-        assert len(self.config.moe['num_experts']) == len(moe_layers_idx)
+            self.config.moe["num_experts"] = model_args.num_experts * len(moe_layers_idx)
+        assert len(self.config.moe["num_experts"]) == len(moe_layers_idx)
 
-        for num_experts, layer_num in zip(self.config.moe['num_experts'], moe_layers_idx):
+        for num_experts, layer_num in zip(self.config.moe["num_experts"], moe_layers_idx):
             pretrained_state_dict = self.transformer.h[layer_num].mlp.state_dict()
             self.transformer.h[layer_num].mlp = MoE(
                 self.config.hidden_size,
@@ -655,17 +598,14 @@ class MoELLaVAQWenForCausalLM(QWenLMHeadModel, LlavaQWenMetaForCausalLM):
                 assert all([torch.allclose(pretrained_state_dict[k], v) for k, v in loaded_state_dict.items()])
                 assert all([torch.allclose(loaded_state_dict[k], v) for k, v in pretrained_state_dict.items()])
         # ipdb.set_trace()
-        rank0_print(f"LLM num_layers: {num_layers}, MoE num_layers: {len(moe_layers_idx)}, where\n",
-                    *[f'layer-{layer_num} has {num_experts} experts\n' for num_experts, layer_num in
-                      zip(self.config.moe['num_experts'], moe_layers_idx)])
+        rank0_print(f"LLM num_layers: {num_layers}, MoE num_layers: {len(moe_layers_idx)}, where\n", *[f"layer-{layer_num} has {num_experts} experts\n" for num_experts, layer_num in zip(self.config.moe["num_experts"], moe_layers_idx)])
 
         for m in self.transformer.h:
             m.forward = MoEQWenBlock_forward(m)
-        rank0_print(f'replace QWenBlock.forward to MoEQWenBlock.forward')
+        rank0_print(f"replace QWenBlock.forward to MoEQWenBlock.forward")
         self.transformer.forward = MoEQWenModel_forward(self.transformer)
-        rank0_print(f'replace QWenModel.forward to MoEQWenModel.forward')
+        rank0_print(f"replace QWenModel.forward to MoEQWenModel.forward")
         # ipdb.set_trace()
-
 
 
 class EvalMoELLaVAQWenForCausalLM(MoELLaVAQWenForCausalLM):
@@ -674,31 +614,30 @@ class EvalMoELLaVAQWenForCausalLM(MoELLaVAQWenForCausalLM):
     def __init__(self, config):
         super(EvalMoELLaVAQWenForCausalLM, self).__init__(config)
 
-        self.router_aux_loss_coef = self.config.moe['router_aux_loss_coef']
+        self.router_aux_loss_coef = self.config.moe["router_aux_loss_coef"]
         num_layers = self.config.num_hidden_layers
-        moe_layers_idx = self.config.moe['moe_layers_idx']
+        moe_layers_idx = self.config.moe["moe_layers_idx"]
 
-        for num_experts, layer_num in zip(self.config.moe['num_experts'], moe_layers_idx):
+        for num_experts, layer_num in zip(self.config.moe["num_experts"], moe_layers_idx):
             self.transformer.h[layer_num].mlp = MoE(
                 self.config.hidden_size,
                 expert=self.transformer.h[layer_num].mlp,
                 num_experts=num_experts,
-                ep_size=self.config.moe['ep_size'],
-                k=self.config.moe['top_k_experts'],
-                capacity_factor=self.config.moe['capacity_factor'],
-                eval_capacity_factor=self.config.moe['eval_capacity_factor'],
-                min_capacity=self.config.moe['min_capacity'],
-                use_residual=self.config.moe['use_residual'],
+                ep_size=self.config.moe["ep_size"],
+                k=self.config.moe["top_k_experts"],
+                capacity_factor=self.config.moe["capacity_factor"],
+                eval_capacity_factor=self.config.moe["eval_capacity_factor"],
+                min_capacity=self.config.moe["min_capacity"],
+                use_residual=self.config.moe["use_residual"],
             )
-        rank0_print(f"LLM num_layers: {num_layers}, MoE num_layers: {len(moe_layers_idx)}, where\n",
-                    *[f'layer-{layer_num} has {num_experts} experts\n' for num_experts, layer_num in
-                      zip(self.config.moe['num_experts'], moe_layers_idx)])
+        rank0_print(f"LLM num_layers: {num_layers}, MoE num_layers: {len(moe_layers_idx)}, where\n", *[f"layer-{layer_num} has {num_experts} experts\n" for num_experts, layer_num in zip(self.config.moe["num_experts"], moe_layers_idx)])
 
         for m in self.transformer.h:
             m.forward = MoEQWenBlock_forward(m)
-        rank0_print(f'replace QWenBlock.forward to MoEQWenBlock.forward')
+        rank0_print(f"replace QWenBlock.forward to MoEQWenBlock.forward")
         self.transformer.forward = MoEQWenModel_forward(self.transformer)
-        rank0_print(f'replace QWenModel.forward to MoEQWenModel.forward')
+        rank0_print(f"replace QWenModel.forward to MoEQWenModel.forward")
+
 
 AutoConfig.register("moe_llava_qwen", MoELLaVAQWenConfig)
 AutoModelForCausalLM.register(MoELLaVAQWenConfig, MoELLaVAQWenForCausalLM)

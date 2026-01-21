@@ -17,14 +17,24 @@ from lmms_eval.models.model_utils.qwen.qwen_generate_utils import make_context
 warnings.simplefilter("ignore", category=DeprecationWarning)
 warnings.filterwarnings("ignore")
 
-os.environ['LD_LIBRARY_PATH'] = f"{os.environ.get('LD_LIBRARY_PATH', '')}:/lib/x86_64-linux-gnu:/usr/lib/x86_64-linux-gnu:/usr/local/cuda/lib64"
-from lmms_eval.models.model_utils.med_moe.llava_phi_moe import MoELLaVAPhiConfig, EvalMoELLaVAPhiForCausalLM
-from lmms_eval.models.model_utils.med_moe.conversation import conv_templates, SeparatorStyle
-from lmms_eval.models.model_utils.med_moe.constants import *
-from lmms_eval.models.model_utils.med_moe.mm_utils import tokenizer_image_token, get_model_name_from_path, KeywordsStoppingCriteria
-
+os.environ["LD_LIBRARY_PATH"] = f"{os.environ.get('LD_LIBRARY_PATH', '')}:/lib/x86_64-linux-gnu:/usr/lib/x86_64-linux-gnu:/usr/local/cuda/lib64"
 from loguru import logger as eval_logger
 from transformers import AutoModelForCausalLM, AutoTokenizer
+
+from lmms_eval.models.model_utils.med_moe.constants import *
+from lmms_eval.models.model_utils.med_moe.conversation import (
+    SeparatorStyle,
+    conv_templates,
+)
+from lmms_eval.models.model_utils.med_moe.llava_phi_moe import (
+    EvalMoELLaVAPhiForCausalLM,
+    MoELLaVAPhiConfig,
+)
+from lmms_eval.models.model_utils.med_moe.mm_utils import (
+    KeywordsStoppingCriteria,
+    get_model_name_from_path,
+    tokenizer_image_token,
+)
 
 
 @register_model("med_moe_phi")
@@ -85,7 +95,7 @@ class Med_MoE_Phi(lmms):
         image_tower.to(device=self._device, dtype=torch.float16)
         self._image_processor = image_tower.image_processor
 
-        self._conv_templates = conv_templates['phi']
+        self._conv_templates = conv_templates["phi"]
         self._max_length = self._config.max_position_embeddings
         self.model.eval()
         self.model.tie_weights()
@@ -224,22 +234,14 @@ class Med_MoE_Phi(lmms):
 
             if len(visuals) > 1:
                 raise ValueError("Only one visual is supported for now")
-            image_tensor = self._image_processor.preprocess(
-                visuals[0], return_tensors='pt'
-            )['pixel_values'].to(self.model.device, dtype=torch.float16) 
+            image_tensor = self._image_processor.preprocess(visuals[0], return_tensors="pt")["pixel_values"].to(self.model.device, dtype=torch.float16)
 
-            
             conv = self._conv_templates.copy()
-            context = DEFAULT_IMAGE_TOKEN + '\n' + context
+            context = DEFAULT_IMAGE_TOKEN + "\n" + context
             conv.append_message(conv.roles[0], context)
             conv.append_message(conv.roles[1], None)
             prompt = conv.get_prompt()
-            input_ids = tokenizer_image_token(
-                prompt, 
-                self.tokenizer, 
-                IMAGE_TOKEN_INDEX, 
-                return_tensors='pt'
-            ).unsqueeze(0).to(self.model.device)
+            input_ids = tokenizer_image_token(prompt, self.tokenizer, IMAGE_TOKEN_INDEX, return_tensors="pt").unsqueeze(0).to(self.model.device)
 
             if gen_kwargs.get("answer_type", None) == "closed":
                 stop_str = conv.sep if conv.sep_style != SeparatorStyle.TWO else conv.sep2
@@ -265,10 +267,10 @@ class Med_MoE_Phi(lmms):
                 do_sample=True if gen_kwargs["temperature"] > 0 else False,
                 temperature=gen_kwargs["temperature"],
                 max_new_tokens=gen_kwargs["max_new_tokens"],
-                stopping_criteria=[stopping_criteria] if stopping_criteria is not None else None
+                stopping_criteria=[stopping_criteria] if stopping_criteria is not None else None,
             )
 
-            text_outputs = self.tokenizer.decode(cont[0, input_ids.shape[1]:], skip_special_tokens=True).strip()
+            text_outputs = self.tokenizer.decode(cont[0, input_ids.shape[1] :], skip_special_tokens=True).strip()
             res.append(text_outputs)
             self.cache_hook.add_partial("generate_until", (context, gen_kwargs), text_outputs)
             pbar.update(1)

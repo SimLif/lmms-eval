@@ -2,4 +2,4 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # DeepSpeed Team
-'''Copyright The Microsoft DeepSpeed Team'''
+"""Copyright The Microsoft DeepSpeed Team"""

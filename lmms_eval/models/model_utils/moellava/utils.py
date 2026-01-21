@@ -3,9 +3,10 @@ import logging
 import logging.handlers
 import os
 import sys
-from torch import nn
+
 import numpy as np
 import requests
+from torch import nn
 
 from lmms_eval.models.model_utils.moellava.constants import LOGDIR
 
@@ -14,6 +15,7 @@ moderation_msg = "YOUR INPUT VIOLATES OUR CONTENT MODERATION GUIDELINES. PLEASE 
 
 handler = None
 
+
 def order_pick_k(lst, k):
     if len(lst) <= k:
         return lst
@@ -21,30 +23,27 @@ def order_pick_k(lst, k):
     index = np.argsort(rng)[:k]
     index_sort = sorted(index)
     new_lst = [lst[i] for i in index_sort]
-    print(
-        f"WARNING: total file: {len(lst)}, random pick: {k}."
-        f" (ignored)"
-    )
+    print(f"WARNING: total file: {len(lst)}, random pick: {k}." f" (ignored)")
     return new_lst
-
 
 
 class HookTool:
     def __init__(self):
         self.fea = None
+
     def hook_fun(self, module, fea_in, fea_out):
         self.fea = fea_out.detach().cpu()
+
 
 def get_gating_logit_by_hook(model):
     fea_hooks = []
     for n, m in model.named_modules():
-        if 'wg' in n and isinstance(m, nn.Linear):
-            print(n, m, 'match!!!!!!!!!!!!!!!!!!!!!!!!!')
+        if "wg" in n and isinstance(m, nn.Linear):
+            print(n, m, "match!!!!!!!!!!!!!!!!!!!!!!!!!")
             cur_hook = HookTool()
             m.register_forward_hook(cur_hook.hook_fun)
             fea_hooks.append(cur_hook)
     return fea_hooks
-
 
 
 def build_logger(logger_name, logger_filename):
@@ -79,8 +78,7 @@ def build_logger(logger_name, logger_filename):
     if handler is None:
         os.makedirs(LOGDIR, exist_ok=True)
         filename = os.path.join(LOGDIR, logger_filename)
-        handler = logging.handlers.TimedRotatingFileHandler(
-            filename, when='D', utc=True, encoding='UTF-8')
+        handler = logging.handlers.TimedRotatingFileHandler(filename, when="D", utc=True, encoding="UTF-8")
         handler.setFormatter(formatter)
 
         for name, item in logging.root.manager.loggerDict.items():
@@ -94,33 +92,34 @@ class StreamToLogger(object):
     """
     Fake file-like stream object that redirects writes to a logger instance.
     """
+
     def __init__(self, logger, log_level=logging.INFO):
         self.terminal = sys.stdout
         self.logger = logger
         self.log_level = log_level
-        self.linebuf = ''
+        self.linebuf = ""
 
     def __getattr__(self, attr):
         return getattr(self.terminal, attr)
 
     def write(self, buf):
         temp_linebuf = self.linebuf + buf
-        self.linebuf = ''
+        self.linebuf = ""
         for line in temp_linebuf.splitlines(True):
             # From the io.TextIOWrapper docs:
             #   On output, if newline is None, any '\n' characters written
             #   are translated to the system default line separator.
             # By default sys.stdout.write() expects '\n' newlines and then
             # translates them so this is still cross platform.
-            if line[-1] == '\n':
+            if line[-1] == "\n":
                 self.logger.log(self.log_level, line.rstrip())
             else:
                 self.linebuf += line
 
     def flush(self):
-        if self.linebuf != '':
+        if self.linebuf != "":
             self.logger.log(self.log_level, self.linebuf.rstrip())
-        self.linebuf = ''
+        self.linebuf = ""
 
 
 def disable_torch_init():
@@ -128,6 +127,7 @@ def disable_torch_init():
     Disable the redundant torch default initialization to accelerate model creation.
     """
     import torch
+
     setattr(torch.nn.Linear, "reset_parameters", lambda self: None)
     setattr(torch.nn.LayerNorm, "reset_parameters", lambda self: None)
 
@@ -137,8 +137,7 @@ def violates_moderation(text):
     Check whether the text violates OpenAI moderation API.
     """
     url = "https://api.openai.com/v1/moderations"
-    headers = {"Content-Type": "application/json",
-               "Authorization": "Bearer " + os.environ["OPENAI_API_KEY"]}
+    headers = {"Content-Type": "application/json", "Authorization": "Bearer " + os.environ["OPENAI_API_KEY"]}
     text = text.replace("\n", "")
     data = "{" + '"input": ' + f'"{text}"' + "}"
     data = data.encode("utf-8")

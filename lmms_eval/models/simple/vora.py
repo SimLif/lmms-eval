@@ -261,13 +261,13 @@ class VoRA(lmms):
         raise NotImplementedError("TODO: Implement multi-round generation")
 
 
-
 def count_parameters_in_billions(model):
     """
     统计模型的参数量，并以十亿(Billion)为单位返回
     """
     total_params = sum(p.numel() for p in model.parameters())
     return total_params / 1e9  # 转换为十亿单位
+
 
 def count_visual_parameters_in_billions(model):
     """
@@ -278,6 +278,7 @@ def count_visual_parameters_in_billions(model):
         if "visual" in name:
             total_params += param.numel()
     return total_params / 1e9  # 转换为十亿单位
+
 
 # 使用示例
 def print_model_size(model):

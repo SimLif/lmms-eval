@@ -16,15 +16,18 @@
 from typing import List, Optional, Tuple, Union
 
 import torch
+import torch.distributed as dist
 import torch.nn as nn
-
-from transformers import AutoConfig, AutoModelForCausalLM, \
-                         MistralConfig, MistralModel, MistralForCausalLM
-
+from transformers import (
+    AutoConfig,
+    AutoModelForCausalLM,
+    MistralConfig,
+    MistralForCausalLM,
+    MistralModel,
+)
 from transformers.modeling_outputs import CausalLMOutputWithPast
 
-from ..llava_arch import LlavaMetaModel, LlavaMetaForCausalLM
-import torch.distributed as dist
+from ..llava_arch import LlavaMetaForCausalLM, LlavaMetaModel
 
 
 class LlavaMistralConfig(MistralConfig):
@@ -73,21 +76,7 @@ class LlavaMistralForCausalLM(MistralForCausalLM, LlavaMetaForCausalLM):
         # ipdb.set_trace()
         # print(f'rank {dist.get_rank()}', 'before prepare_inputs_labels_for_multimodal')
         if inputs_embeds is None:
-            (
-                input_ids,
-                position_ids,
-                attention_mask,
-                past_key_values,
-                inputs_embeds,
-                labels
-            ) = self.prepare_inputs_labels_for_multimodal(
-                input_ids,
-                position_ids,
-                attention_mask,
-                past_key_values,
-                labels,
-                images
-            )
+            (input_ids, position_ids, attention_mask, past_key_values, inputs_embeds, labels) = self.prepare_inputs_labels_for_multimodal(input_ids, position_ids, attention_mask, past_key_values, labels, images)
 
         # dist.barrier()
         # print(f'rank {dist.get_rank()}', 'after prepare_inputs_labels_for_multimodal')
@@ -101,15 +90,13 @@ class LlavaMistralForCausalLM(MistralForCausalLM, LlavaMetaForCausalLM):
             use_cache=use_cache,
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
-            return_dict=return_dict
+            return_dict=return_dict,
         )
         # dist.barrier()
         # print(f'rank {dist.get_rank()}', 'after LLM')
         return out
 
-    def prepare_inputs_for_generation(
-            self, input_ids, past_key_values=None, attention_mask=None, inputs_embeds=None, **kwargs
-    ):
+    def prepare_inputs_for_generation(self, input_ids, past_key_values=None, attention_mask=None, inputs_embeds=None, **kwargs):
         if past_key_values:
             input_ids = input_ids[:, -1:]
 

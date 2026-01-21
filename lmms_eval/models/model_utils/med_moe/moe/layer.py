@@ -3,15 +3,16 @@
 
 # DeepSpeed Team
 
-import torch
-
-from deepspeed.utils import log_dist
-
-from deepspeed.utils import groups
-from .sharded_moe import MOELayer, TopKGate
-from .experts import Experts
-import typing
 import copy
+import typing
+
+import torch
+from deepspeed.utils import groups, log_dist
+
+from .experts import Experts
+from .sharded_moe import MOELayer, TopKGate
+
+
 class MoE(torch.nn.Module):
     """Initialize an MoE layer.
 
@@ -32,24 +33,26 @@ class MoE(torch.nn.Module):
         enable_expert_tensor_parallelism (bool, optional): default=False, whether to use tensor parallelism for experts
     """
 
-    def __init__(self,
-                 hidden_size,
-                 expert,
-                 num_experts=1,
-                 ep_size=1,
-                 k=1,
-                 capacity_factor=1.,
-                 eval_capacity_factor=1.,
-                 min_capacity=4,
-                 use_residual=False,
-                 noisy_gate_policy: typing.Optional[str] = None,
-                 drop_tokens: bool = True,
-                 use_rts=True,
-                 use_tutel: bool = False,
-                 router: typing.Optional[str] = None,
-                 enable_expert_tensor_parallelism: bool = False,
-                 outert_expert_mlp=None,
-                 training : bool = False):
+    def __init__(
+        self,
+        hidden_size,
+        expert,
+        num_experts=1,
+        ep_size=1,
+        k=1,
+        capacity_factor=1.0,
+        eval_capacity_factor=1.0,
+        min_capacity=4,
+        use_residual=False,
+        noisy_gate_policy: typing.Optional[str] = None,
+        drop_tokens: bool = True,
+        use_rts=True,
+        use_tutel: bool = False,
+        router: typing.Optional[str] = None,
+        enable_expert_tensor_parallelism: bool = False,
+        outert_expert_mlp=None,
+        training: bool = False,
+    ):
 
         super(MoE, self).__init__()
 
@@ -61,22 +64,20 @@ class MoE(torch.nn.Module):
         self.num_experts = num_experts
         self.num_local_experts = num_experts // self.ep_size
 
-        log_dist(
-            f'Creating MoE layer with num_experts: {num_experts} | num_local_experts: {self.num_local_experts} | expert_parallel_size: {self.ep_size}',
-            [0])
+        log_dist(f"Creating MoE layer with num_experts: {num_experts} | num_local_experts: {self.num_local_experts} | expert_parallel_size: {self.ep_size}", [0])
 
-        assert noisy_gate_policy is None or noisy_gate_policy in ['None', 'Jitter', 'RSample'], \
-            'Unsupported noisy_gate_policy: ' + noisy_gate_policy
+        assert noisy_gate_policy is None or noisy_gate_policy in ["None", "Jitter", "RSample"], "Unsupported noisy_gate_policy: " + noisy_gate_policy
 
         experts = Experts(expert, self.num_local_experts, self.expert_group_name)
-        self.deepspeed_moe = MOELayer(TopKGate(hidden_size, num_experts, k, capacity_factor, eval_capacity_factor,
-                                               min_capacity,router, noisy_gate_policy, drop_tokens,training, use_rts),
-                                      experts,
-                                      self.expert_group_name,
-                                      self.ep_size,
-                                      self.num_local_experts,
-                                      use_tutel=use_tutel)
-        self.meta_moe=outert_expert_mlp
+        self.deepspeed_moe = MOELayer(
+            TopKGate(hidden_size, num_experts, k, capacity_factor, eval_capacity_factor, min_capacity, router, noisy_gate_policy, drop_tokens, training, use_rts),
+            experts,
+            self.expert_group_name,
+            self.ep_size,
+            self.num_local_experts,
+            use_tutel=use_tutel,
+        )
+        self.meta_moe = outert_expert_mlp
         if self.use_residual:
             self.mlp = expert
             # coefficient is used for weighted sum of the output of expert and mlp
@@ -100,7 +101,7 @@ class MoE(torch.nn.Module):
         self.deepspeed_moe._set_ep_group(groups._get_expert_parallel_group(self.expert_group_name))
 
     def forward(self, hidden_states, used_token=None, token_type_ids=None):
-        """ MoE forward
+        """MoE forward
 
         Arguments:
             hidden_states (Tensor): input to the layer
@@ -116,7 +117,7 @@ class MoE(torch.nn.Module):
             * exp_counts (int): expert count
         """
         output = self.deepspeed_moe(hidden_states, used_token, token_type_ids=token_type_ids)
-        mea_output=self.meta_moe(hidden_states)
+        mea_output = self.meta_moe(hidden_states)
         if self.use_residual:
             # Residual MoE
             output_mlp = self.mlp(hidden_states)
@@ -125,6 +126,6 @@ class MoE(torch.nn.Module):
             coef = self.coefficient(hidden_states)
             coef = torch.nn.functional.softmax(coef, dim=-1)
             output = output * coef[..., 0:1] + output_mlp * coef[..., 1:]
-        output=output+mea_output
+        output = output + mea_output
 
         return output, self.deepspeed_moe.l_aux, self.deepspeed_moe.exp_counts

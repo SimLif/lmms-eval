@@ -1,13 +1,17 @@
-import torch
-import torch.nn as nn
 import re
 
+import torch
+import torch.nn as nn
 from einops import rearrange
 
 from .pool_block import Pool_Block
-from .qformer import qformer_config_template, Blip2Model, cheap_qformer_config_template, \
-    Cheap_Blip2Model
-from .simple_block import SimpleBlock, Cheap_SimpleBlock
+from .qformer import (
+    Blip2Model,
+    Cheap_Blip2Model,
+    cheap_qformer_config_template,
+    qformer_config_template,
+)
+from .simple_block import Cheap_SimpleBlock, SimpleBlock
 
 
 class IdentityMap(nn.Module):
@@ -19,36 +23,35 @@ class IdentityMap(nn.Module):
 
     @property
     def config(self):
-        return {"mm_projector_type": 'identity'}
-
+        return {"mm_projector_type": "identity"}
 
 
 def build_image_projector(config, delay_load=False, **kwargs):
-    projector_type = getattr(config, 'image_projector_type', 'linear')
+    projector_type = getattr(config, "image_projector_type", "linear")
 
-    is_cheap = 'cheap' in projector_type
-    projector_type = projector_type.replace('cheap_', '') if is_cheap else projector_type
+    is_cheap = "cheap" in projector_type
+    projector_type = projector_type.replace("cheap_", "") if is_cheap else projector_type
 
-    if projector_type == 'linear':
+    if projector_type == "linear":
         return nn.Linear(config.mm_hidden_size, config.hidden_size)
 
-    elif projector_type.startswith('qformer'):  # qformer4_36
+    elif projector_type.startswith("qformer"):  # qformer4_36
         qformer_config = cheap_qformer_config_template(config, projector_type) if is_cheap else qformer_config_template(config, projector_type)
         return Cheap_Blip2Model(qformer_config) if is_cheap else Blip2Model(qformer_config)
 
-    elif projector_type.startswith('simple'):  # simple_in0_out0
+    elif projector_type.startswith("simple"):  # simple_in0_out0
         pattern = r"simple_in(\d+)_out(\d+)"
         match = re.search(pattern, projector_type)
         num_in_block = int(match.group(1))
         num_out_block = int(match.group(2))
         return Cheap_SimpleBlock(config.mm_hidden_size, config.hidden_size, num_in_block, num_out_block) if is_cheap else SimpleBlock(config.mm_hidden_size, config.hidden_size, num_in_block, num_out_block)
 
-    elif projector_type.startswith('pool'):  # pool_
-        projector_type = projector_type.replace('pool_', '')
+    elif projector_type.startswith("pool"):  # pool_
+        projector_type = projector_type.replace("pool_", "")
         return Pool_Block(projector_type, config)
 
     else:
-        mlp_gelu_match = re.match(r'^mlp(\d+)x_gelu$', projector_type)
+        mlp_gelu_match = re.match(r"^mlp(\d+)x_gelu$", projector_type)
         if mlp_gelu_match:
             mlp_depth = int(mlp_gelu_match.group(1))
             modules = [nn.Linear(config.mm_hidden_size, config.hidden_size)]
@@ -57,39 +60,38 @@ def build_image_projector(config, delay_load=False, **kwargs):
                 modules.append(nn.Linear(config.hidden_size, config.hidden_size))
             return nn.Sequential(*modules)
 
-    if projector_type == 'identity':
+    if projector_type == "identity":
         return IdentityMap()
 
-    raise ValueError(f'Unknown projector type: {projector_type}')
-
+    raise ValueError(f"Unknown projector type: {projector_type}")
 
 
 def build_video_projector(config, delay_load=False, **kwargs):
-    projector_type = getattr(config, 'video_projector_type', 'linear')
+    projector_type = getattr(config, "video_projector_type", "linear")
 
-    is_cheap = 'cheap' in projector_type
-    projector_type = projector_type.replace('cheap_', '') if is_cheap else projector_type
+    is_cheap = "cheap" in projector_type
+    projector_type = projector_type.replace("cheap_", "") if is_cheap else projector_type
 
-    if projector_type == 'linear':
+    if projector_type == "linear":
         return nn.Linear(config.mm_hidden_size, config.hidden_size)
 
-    elif projector_type.startswith('qformer'):  # qformer4_36
+    elif projector_type.startswith("qformer"):  # qformer4_36
         qformer_config = cheap_qformer_config_template(config, projector_type) if is_cheap else qformer_config_template(config, projector_type)
         return Cheap_Blip2Model(qformer_config) if is_cheap else Blip2Model(qformer_config)
 
-    elif projector_type.startswith('simple'):  # simple_in0_out0
+    elif projector_type.startswith("simple"):  # simple_in0_out0
         pattern = r"simple_in(\d+)_out(\d+)"
         match = re.search(pattern, projector_type)
         num_in_block = int(match.group(1))
         num_out_block = int(match.group(2))
         return Cheap_SimpleBlock(config.mm_hidden_size, config.hidden_size, num_in_block, num_out_block) if is_cheap else SimpleBlock(config.mm_hidden_size, config.hidden_size, num_in_block, num_out_block)
 
-    elif projector_type.startswith('pool'):  # pool_
-        projector_type = projector_type.replace('pool_', '')
+    elif projector_type.startswith("pool"):  # pool_
+        projector_type = projector_type.replace("pool_", "")
         return Pool_Block(projector_type, config)
 
     else:
-        mlp_gelu_match = re.match(r'^mlp(\d+)x_gelu$', projector_type)
+        mlp_gelu_match = re.match(r"^mlp(\d+)x_gelu$", projector_type)
         if mlp_gelu_match:
             mlp_depth = int(mlp_gelu_match.group(1))
             modules = [nn.Linear(config.mm_hidden_size, config.hidden_size)]
@@ -98,27 +100,26 @@ def build_video_projector(config, delay_load=False, **kwargs):
                 modules.append(nn.Linear(config.hidden_size, config.hidden_size))
             return nn.Sequential(*modules)
 
-    if projector_type == 'identity':
+    if projector_type == "identity":
         return IdentityMap()
 
-    raise ValueError(f'Unknown projector type: {projector_type}')
+    raise ValueError(f"Unknown projector type: {projector_type}")
+
 
 class MLP(nn.Module):
     def __init__(self, mm_hidden_size, hidden_size):
         super(MLP, self).__init__()
-        self.mlp = nn.Sequential(
-            nn.Linear(mm_hidden_size, hidden_size),
-            nn.GELU(),
-            nn.Linear(hidden_size, hidden_size)
-        )
+        self.mlp = nn.Sequential(nn.Linear(mm_hidden_size, hidden_size), nn.GELU(), nn.Linear(hidden_size, hidden_size))
+
     def forward(self, x):
         return self.mlp(x)
+
 
 class build_projector(nn.Module):
     def __init__(self, config, delay_load=False, **kwargs):
         super(build_projector, self).__init__()
-        mm_image_tower = getattr(config, 'mm_image_tower', None)
-        mm_video_tower = getattr(config, 'mm_video_tower', None)
+        mm_image_tower = getattr(config, "mm_image_tower", None)
+        mm_video_tower = getattr(config, "mm_video_tower", None)
         self.image_spatial_proj = build_image_projector(config, delay_load=False, **kwargs) if mm_image_tower is not None else None
 
         if mm_video_tower is not None:
@@ -133,7 +134,6 @@ class build_projector(nn.Module):
             self.video_temproal_proj = nn.Identity()
             self.video_global_proj = nn.Identity()
 
-
     def forward_image(self, image_feature):
         return self.image_spatial_proj(image_feature)
 
@@ -142,8 +142,8 @@ class build_projector(nn.Module):
         b, t, n, c = origin_patch_feature.shape
 
         # print(video_feature.shape, origin_patch_feature.shape)
-        patch_feature = self.video_patch_proj(rearrange(origin_patch_feature, 'b t n c -> (b t) n c'))  # [b, t, n, c] -> [bt, new_n, c]
-        patch_feature = rearrange(patch_feature, '(b t) new_n c -> b t new_n c', b=b)  # [bt, new_n, c] -> [b, t, new_n, c]
+        patch_feature = self.video_patch_proj(rearrange(origin_patch_feature, "b t n c -> (b t) n c"))  # [b, t, n, c] -> [bt, new_n, c]
+        patch_feature = rearrange(patch_feature, "(b t) new_n c -> b t new_n c", b=b)  # [bt, new_n, c] -> [b, t, new_n, c]
 
         video_hidden_state = patch_feature
 
@@ -162,7 +162,7 @@ class build_projector(nn.Module):
         for i in range(b):
             tmp = []
             for j in range(t):
-                if j+1 != t:
+                if j + 1 != t:
                     tmp.append(video_hidden_state[i][j])  # 1+1+new_n, c
                 elif self.video_spatial_proj:  # add to tail
                     tmp.append(torch.cat([video_hidden_state[i][j], spatial_feature[i]], dim=0))  # 1+1+new_n+n, c
@@ -180,8 +180,8 @@ class build_projector(nn.Module):
         #         else:
         #             video_hidden_state_list.append(video_hidden_state[i][j])  # 1+1+new_n, c
 
-
         return video_hidden_state_list
+
     # def forward(self, x):
     #     if x.ndim == 3:  # batch consists of images, [b, n, c]
     #         return self.forward_image(x)

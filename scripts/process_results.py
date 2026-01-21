@@ -1,8 +1,9 @@
-import os
 import glob
+import json  # Added for the test setup
+import os
 import re
 import subprocess
-import json # Added for the test setup
+
 
 def find_and_process_checkpoints(parent_dir, model_base_name, show_results_script_path="show_results.py"):
     """
@@ -21,7 +22,7 @@ def find_and_process_checkpoints(parent_dir, model_base_name, show_results_scrip
     # 文件夹应以 model_base_name 开头并包含 "__checkpoint-"
     # 例如: qwen2-vl-2b-instruct-4e2-ada-med-10epoch__checkpoint-500
     folder_pattern = os.path.join(parent_dir, f"{model_base_name}__checkpoint-*")
-    
+
     candidate_folders = glob.glob(folder_pattern)
 
     for folder_path in candidate_folders:
@@ -29,14 +30,14 @@ def find_and_process_checkpoints(parent_dir, model_base_name, show_results_scrip
             continue
 
         folder_name = os.path.basename(folder_path)
-        
+
         # 提取 checkpoint 编号
         # 使用正则表达式从文件夹名称中提取 "__checkpoint-" 后面的数字
-        match = re.search(r'__checkpoint-(\d+)', folder_name)
+        match = re.search(r"__checkpoint-(\d+)", folder_name)
         if not match:
             print(f"警告: 无法从文件夹 '{folder_name}' 中提取 checkpoint 编号。已跳过。")
             continue
-        
+
         try:
             checkpoint_num = int(match.group(1))
         except ValueError:
@@ -51,18 +52,14 @@ def find_and_process_checkpoints(parent_dir, model_base_name, show_results_scrip
         if not json_files:
             print(f"警告: 在文件夹 '{folder_path}' 中未找到 '*_results.json' 文件。已跳过。")
             continue
-        
+
         if len(json_files) > 1:
             # 如果找到多个匹配的JSON文件，默认使用第一个，并打印警告
             print(f"警告: 在文件夹 '{folder_path}' 中找到多个 '*_results.json' 文件。将使用第一个: '{json_files[0]}'.")
-        
-        results_json_path = os.path.abspath(json_files[0]) # 确保是绝对路径
 
-        checkpoints_info.append({
-            "checkpoint": checkpoint_num,
-            "folder_path": folder_path,
-            "json_file_path": results_json_path
-        })
+        results_json_path = os.path.abspath(json_files[0])  # 确保是绝对路径
+
+        checkpoints_info.append({"checkpoint": checkpoint_num, "folder_path": folder_path, "json_file_path": results_json_path})
 
     if not checkpoints_info:
         print(f"在 '{parent_dir}' 中未找到模型 '{model_base_name}' 的 checkpoint 文件夹。")
@@ -78,29 +75,29 @@ def find_and_process_checkpoints(parent_dir, model_base_name, show_results_scrip
     print("\n按顺序处理 checkpoints:")
     for info in checkpoints_info:
         print(f"\n--- 正在处理 Checkpoint: {info['checkpoint']} ---")
-        
+
         # 1. 打印 checkpoint
         print(f"Checkpoint: {info['checkpoint']}")
-        
+
         # 2. 执行 python show_results.py xxxx_results.json 的绝对路径
         command = ["python", show_results_script_path, info["json_file_path"]]
-        
+
         print(f"将执行命令: {' '.join(command)}")
-        
+
         try:
             # 执行外部脚本，并捕获其输出
-            process = subprocess.run(command, check=True, text=True, capture_output=True, encoding='utf-8')
+            process = subprocess.run(command, check=True, text=True, capture_output=True, encoding="utf-8")
             print("命令执行成功。")
             if process.stdout:
                 print("来自 show_results.py 的输出:")
                 print(process.stdout)
-            if process.stderr: # 尽管 check=True, 有些程序可能将警告输出到stderr
+            if process.stderr:  # 尽管 check=True, 有些程序可能将警告输出到stderr
                 print("来自 show_results.py 的错误信息 (stderr):")
                 print(process.stderr)
         except FileNotFoundError:
             print(f"错误: 脚本 '{show_results_script_path}' 未找到。")
             print("请确保 'python' 在您的 PATH 环境变量中，并且脚本路径正确。")
-            break # 如果脚本未找到，则停止进一步处理
+            break  # 如果脚本未找到，则停止进一步处理
         except subprocess.CalledProcessError as e:
             # 当被调用的脚本返回非零退出码时，会抛出此异常
             print(f"执行 checkpoint {info['checkpoint']} 的命令时出错:")
@@ -123,16 +120,16 @@ if __name__ == "__main__":
     # 父文件夹，例如 "a"
     parent_directory = "/mnt/data/haoqiang/workspace/02-lmms-eval/logs"
     # 你想处理的基础模型名称
-    # model_name_to_process = "qwen2-vl-2b-instruct-3e1-med-10epoch" 
-    # model_name_to_process = "qwen2-vl-2b-instruct-4e2-ada-med-10epoch" 
+    # model_name_to_process = "qwen2-vl-2b-instruct-3e1-med-10epoch"
+    # model_name_to_process = "qwen2-vl-2b-instruct-4e2-ada-med-10epoch"
     # model_name_to_process = 'qwen2-vl-2b-instruct-3e1-ada-med-10epoch'
     # model_name_to_process = 'qwen2-vl-2b-instruct-96e32-ada-med-10epoch'
-    model_name_to_process = 'qwen2-vl-2b-instruct-96e32-ada-med-re-10epoch'
-    
+    model_name_to_process = "qwen2-vl-2b-instruct-96e32-ada-med-re-10epoch"
+
     # 你的 show_results.py 脚本的路径。
     # 如果它与此脚本在同一目录中，则只需 "show_results.py"。
     # 否则，请提供完整路径或相对路径，例如 "scripts/show_results.py"。
-    show_results_script = "show_results.py" 
+    show_results_script = "show_results.py"
     # --- 配置区域结束 ---
 
     # --- 测试设置 ---
@@ -167,7 +164,7 @@ if __name__ == "__main__":
     #         f.write("try:\n")
     #         f.write("    with open(sys.argv[1], 'r', encoding='utf-8') as rf:\n")
     #         # 假设它是一个JSON文件
-    #         f.write("        data = json.load(rf)\n") 
+    #         f.write("        data = json.load(rf)\n")
     #         f.write("        print(f'Mock show_results.py: 成功从 {sys.argv[1]} 读取JSON数据。')\n")
     #         f.write("        print(f'Mock show_results.py: 内容: {data}')\n")
     #         f.write("except json.JSONDecodeError:\n")
@@ -187,7 +184,7 @@ if __name__ == "__main__":
     #     if not os.path.exists(full_folder_path):
     #         os.makedirs(full_folder_path)
     #         print(f"创建了测试文件夹: {full_folder_path}")
-        
+
     #     target_file_path = os.path.join(full_folder_path, file_name_in_folder)
     #     if not os.path.exists(target_file_path) and file_name_in_folder.endswith("_results.json"):
     #         # 创建一个虚拟的 JSON 文件
@@ -196,10 +193,10 @@ if __name__ == "__main__":
     #             checkpoint_val = int(checkpoint_val_str)
     #         except ValueError:
     #             checkpoint_val = 0 #  对于 "malformed" 之类的名称
-            
+
     #         dummy_json_content = {
     #             "checkpoint_folder_name": folder_base_name,
-    #             "file_processed_by_script": file_name_in_folder, 
+    #             "file_processed_by_script": file_name_in_folder,
     #             "example_metric_value": checkpoint_val,
     #             "notes": "这是一个自动生成的测试文件"
     #         }
@@ -211,14 +208,13 @@ if __name__ == "__main__":
     #             f.write("This is a dummy non-JSON file for testing.")
     #          print(f"创建了测试文件 (非JSON): {target_file_path}")
 
-
     #     # 创建一个额外的非匹配json文件以测试glob的鲁棒性
     #     other_json_path = os.path.join(full_folder_path, "some_other_data.json")
     #     if not os.path.exists(other_json_path):
     #         with open(other_json_path, "w", encoding="utf-8") as f:
     #             json.dump({"info": "This is another JSON file, should not be processed by the main logic."}, f)
     #         print(f"创建了额外的JSON文件: {other_json_path}")
-        
+
     #     # 创建一个非json文件
     #     log_txt_path = os.path.join(full_folder_path, "activity.log")
     #     if not os.path.exists(log_txt_path):

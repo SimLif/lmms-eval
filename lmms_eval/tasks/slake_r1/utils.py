@@ -2,17 +2,21 @@ import datetime
 import json
 import os
 import re
+import sys
 from collections import defaultdict
 
 from loguru import logger as eval_logger
 
-import sys
 dir_name = os.path.dirname(os.path.abspath(__file__))
 
 
 from lmms_eval.tasks._task_utils.file_utils import generate_submission_file
-from lmms_eval.tasks.slake.metrics import calculate_exactmatch, calculate_f1score, calculate_bleu, calculate_f1score_old
-
+from lmms_eval.tasks.slake.metrics import (
+    calculate_bleu,
+    calculate_exactmatch,
+    calculate_f1score,
+    calculate_f1score_old,
+)
 
 replace_prompt = " Please answer yes or no."
 
@@ -54,11 +58,11 @@ def slake_open_process_results(doc, results):
 
     return {
         # "exact_match": exact_match,
-        "f1":  f1_score * 100,
+        "f1": f1_score * 100,
         "precision": precision * 100,
         "recall": recall * 100,
         "recall_old": recall_old * 100,
-        "bleu": bleu_score* 100,
+        "bleu": bleu_score * 100,
     }
 
 

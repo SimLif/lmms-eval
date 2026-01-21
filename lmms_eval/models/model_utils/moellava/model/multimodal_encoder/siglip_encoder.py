@@ -1,19 +1,18 @@
 import torch
 import torch.nn as nn
-
 from transformers import SiglipImageProcessor, SiglipVisionConfig
 from transformers.models.siglip.modeling_siglip import SiglipVisionModel
 
 
 class SiglipVisionTower(nn.Module):
-    def __init__(self, image_tower, args, delay_load=False, cache_dir='./cache_dir'):
+    def __init__(self, image_tower, args, delay_load=False, cache_dir="./cache_dir"):
         super().__init__()
 
         self.is_loaded = False
 
         self.image_tower_name = image_tower
         self.select_layer = args.mm_vision_select_layer
-        self.select_feature = getattr(args, 'mm_vision_select_feature', 'patch')
+        self.select_feature = getattr(args, "mm_vision_select_feature", "patch")
 
         self.cache_dir = cache_dir
 
@@ -31,12 +30,12 @@ class SiglipVisionTower(nn.Module):
 
     def feature_select(self, image_forward_outs):
         image_features = image_forward_outs.hidden_states[self.select_layer]
-        if self.select_feature == 'patch':
+        if self.select_feature == "patch":
             image_features = image_features[:, 1:]
-        elif self.select_feature == 'cls_patch':
+        elif self.select_feature == "cls_patch":
             image_features = image_features
         else:
-            raise ValueError(f'Unexpected select feature: {self.select_feature}')
+            raise ValueError(f"Unexpected select feature: {self.select_feature}")
         return image_features
 
     @torch.no_grad()

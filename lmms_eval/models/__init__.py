@@ -92,7 +92,7 @@ AVAILABLE_SIMPLE_MODELS = {
     "moe_llava_qwen": "MoE_Llava_Qwen",
     "moe_llava_qwen_med": "MoE_Llava_Qwen_Med",
     "adamllm_qwen_med": "AdaMLLM_Qwen_Med",
-    'moe_qwen2_vl': 'MoE_Qwen2_VL',
+    "moe_qwen2_vl": "MoE_Qwen2_VL",
 }
 
 AVAILABLE_CHAT_TEMPLATE_MODELS = {

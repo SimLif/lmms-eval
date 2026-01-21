@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-import json
 import argparse
+import json
+
 
 def get_metric(results, task_name, metric_key):
     """
@@ -10,10 +11,11 @@ def get_metric(results, task_name, metric_key):
     task_data = results.get(task_name, {})
     return task_data.get(metric_key, -1)
 
-def main(json_file=None, noise_type='image_gaussian_noise'):
+
+def main(json_file=None, noise_type="image_gaussian_noise"):
     if json_file is None:
         parser = argparse.ArgumentParser(description="解析实验结果 JSON 文件并打印指定指标")
-        parser.add_argument('-n', '--noise_type', type=str, default='image_gaussian_noise', help='噪声类型，默认值为 image_gaussian_noise')
+        parser.add_argument("-n", "--noise_type", type=str, default="image_gaussian_noise", help="噪声类型，默认值为 image_gaussian_noise")
         parser.add_argument("json_file", help="实验结果的 JSON 文件路径")
         args = parser.parse_args()
         noise_type = args.noise_type
@@ -32,7 +34,7 @@ def main(json_file=None, noise_type='image_gaussian_noise'):
     output = []
 
     # 1. vqa_rad_open: (recall_old, recall, precision, f1, bleu)
-    task = "vqa_rad_open"+"_"+noise_type
+    task = "vqa_rad_open" + "_" + noise_type
     output.append(get_metric(results, task, "recall_old,none"))
     output.append(get_metric(results, task, "recall,none"))
     output.append(get_metric(results, task, "precision,none"))
@@ -40,11 +42,11 @@ def main(json_file=None, noise_type='image_gaussian_noise'):
     output.append(get_metric(results, task, "bleu,none"))
 
     # 2. vqa_rad_closed: (acc 即 accuracy)
-    task = "vqa_rad_closed"+"_"+noise_type
+    task = "vqa_rad_closed" + "_" + noise_type
     output.append(get_metric(results, task, "accuracy,none"))
 
     # 3. slake_open: (recall_old, recall, precision, f1, bleu)
-    task = "slake_open"+"_"+noise_type
+    task = "slake_open" + "_" + noise_type
     output.append(get_metric(results, task, "recall_old,none"))
     output.append(get_metric(results, task, "recall,none"))
     output.append(get_metric(results, task, "precision,none"))
@@ -52,11 +54,11 @@ def main(json_file=None, noise_type='image_gaussian_noise'):
     output.append(get_metric(results, task, "bleu,none"))
 
     # 4. slake_closed: (acc)
-    task = "slake_closed"+"_"+noise_type
+    task = "slake_closed" + "_" + noise_type
     output.append(get_metric(results, task, "accuracy,none"))
 
     # 5. path_vqa_open: (recall_old, recall, precision, f1, bleu)
-    task = "path_vqa_open"+"_"+noise_type
+    task = "path_vqa_open" + "_" + noise_type
     output.append(get_metric(results, task, "recall_old,none"))
     output.append(get_metric(results, task, "recall,none"))
     output.append(get_metric(results, task, "precision,none"))
@@ -64,11 +66,11 @@ def main(json_file=None, noise_type='image_gaussian_noise'):
     output.append(get_metric(results, task, "bleu,none"))
 
     # 6. path_vqa_closed: (acc)
-    task = "path_vqa_closed"+"_"+noise_type
+    task = "path_vqa_closed" + "_" + noise_type
     output.append(get_metric(results, task, "accuracy,none"))
 
     # 7. vqa_med_open: (从 vqa_med 中取 open 指标：recall_old, recall, precision, f1, bleu)
-    task = "vqa_med"+"_"+noise_type
+    task = "vqa_med" + "_" + noise_type
     output.append(get_metric(results, task, "recall_old,none"))
     output.append(get_metric(results, task, "recall,none"))
     output.append(get_metric(results, task, "precision,none"))
@@ -79,15 +81,16 @@ def main(json_file=None, noise_type='image_gaussian_noise'):
     # output.append(get_metric(results, task, "accuracy,none"))
 
     # 9. pmc_vqa: (acc)
-    task = "pmc_vqa"+"_"+noise_type
+    task = "pmc_vqa" + "_" + noise_type
     output.append(get_metric(results, task, "accuracy,none"))
 
     # 10. omni_med_vqa_mini: (acc)
-    task = "omni_med_vqa_mini"+"_"+noise_type
+    task = "omni_med_vqa_mini" + "_" + noise_type
     output.append(get_metric(results, task, "accuracy,none"))
 
     # 输出结果，使用 tab 键分隔，方便复制到 Excel 中
     print("\t".join(str(v) for v in output))
+
 
 if __name__ == "__main__":
     # main()
@@ -141,7 +144,6 @@ if __name__ == "__main__":
     #     '/mnt/data/haoqiang/workspace/02-lmms-eval/logs/checkpoints__qwen2-vl-2b-instruct-192e64-med-nano-ds-tok-share-5epoch/20250521_200537_results.json'
     # ]
 
-
     # # text char substitution
     # noise_type = 'text_char_substitution'
     # json_file_list = [
@@ -186,7 +188,7 @@ if __name__ == "__main__":
     #     '/mnt/data/haoqiang/workspace/02-lmms-eval/logs/checkpoints__qwen2-vl-2b-instruct-12e4-med-nano-ds-tok-share-mmed-5epoch/20250514_074128_results.json'
     # ]
 
-    noise_type = 'text_proportional_char_substitution'
+    noise_type = "text_proportional_char_substitution"
     # json_file_list = [
     #     '/mnt/data/haoqiang/workspace/02-lmms-eval/logs/checkpoints__qwen2-vl-2b-instruct-adamllm-med-full-5epoch/20250514_075509_results.json',
     #     '/mnt/data/haoqiang/workspace/02-lmms-eval/logs/checkpoints__qwen2-vl-2b-instruct-4e2-med-ada-5epoch/20250514_084942_results.json',
@@ -206,14 +208,10 @@ if __name__ == "__main__":
     #     '/mnt/data/haoqiang/workspace/02-lmms-eval/logs/checkpoints__qwen2-vl-2b-instruct-192e64-med-nano-ds-tok-share-5epoch/20250514_163403_results.json'
     # ]
     json_file_list = [
-        '/mnt/data/haoqiang/workspace/02-lmms-eval/logs/checkpoints__qwen2-vl-2b-instruct-96e32-med-nano-ds-tok-share-5epoch/20250521_200553_results.json',
-        '/mnt/data/haoqiang/workspace/02-lmms-eval/logs/checkpoints__qwen2-vl-2b-instruct-192e64-med-nano-ds-tok-share-5epoch/20250521_200559_results.json'
+        "/mnt/data/haoqiang/workspace/02-lmms-eval/logs/checkpoints__qwen2-vl-2b-instruct-96e32-med-nano-ds-tok-share-5epoch/20250521_200553_results.json",
+        "/mnt/data/haoqiang/workspace/02-lmms-eval/logs/checkpoints__qwen2-vl-2b-instruct-192e64-med-nano-ds-tok-share-5epoch/20250521_200559_results.json",
     ]
 
-
     for json_file in json_file_list:
-        print('\n'+json_file)
-        main(
-            json_file=json_file,
-            noise_type=noise_type
-        )
+        print("\n" + json_file)
+        main(json_file=json_file, noise_type=noise_type)

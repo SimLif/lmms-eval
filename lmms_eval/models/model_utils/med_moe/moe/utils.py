@@ -3,8 +3,10 @@
 
 # DeepSpeed Team
 
-from typing import List, Tuple, Dict
+from typing import Dict, List, Tuple
+
 import torch
+
 from .layer import MoE
 
 
@@ -26,8 +28,7 @@ def is_moe_param(param: torch.Tensor) -> bool:
     return False
 
 
-def split_params_into_shared_and_expert_params(
-        params: List[torch.nn.Parameter]) -> Tuple[torch.nn.Parameter, torch.nn.Parameter]:
+def split_params_into_shared_and_expert_params(params: List[torch.nn.Parameter]) -> Tuple[torch.nn.Parameter, torch.nn.Parameter]:
     shared_params, expert_params = [], []
     for p in params:
         if is_moe_param(p):
@@ -37,8 +38,7 @@ def split_params_into_shared_and_expert_params(
     return shared_params, expert_params
 
 
-def split_params_grads_into_shared_and_expert_params(
-        group: List[torch.nn.Parameter]) -> Tuple[torch.nn.Parameter, torch.nn.Parameter]:
+def split_params_grads_into_shared_and_expert_params(group: List[torch.nn.Parameter]) -> Tuple[torch.nn.Parameter, torch.nn.Parameter]:
     """Split grad of parameters into grads of non-expert params
     and grads of expert params. This is useful while computing
     grad-norms for clipping and overflow detection
@@ -62,8 +62,7 @@ def split_params_grads_into_shared_and_expert_params(
     return shared_grads, expert_grads
 
 
-def split_params_into_different_moe_groups_for_optimizer(param_groups: Tuple[Dict],
-                                                         max_group_size=178956971) -> Tuple[Dict]:
+def split_params_into_different_moe_groups_for_optimizer(param_groups: Tuple[Dict], max_group_size=178956971) -> Tuple[Dict]:
     """Split parameters into different MoE groups for optimizer
 
     Args:
@@ -91,27 +90,27 @@ def split_params_into_different_moe_groups_for_optimizer(param_groups: Tuple[Dic
     group_moe = {}
     # Create the param MoE groups, leave param assign to next step
     for param_group in param_groups:
-        group_moe[param_group['name']] = {}
+        group_moe[param_group["name"]] = {}
         for key in data_parallel_group_names:
-            group_moe[param_group['name']][key] = {}
-            group_moe[param_group['name']][key]['name'] = key
-            group_moe[param_group['name']][key]['moe'] = True
+            group_moe[param_group["name"]][key] = {}
+            group_moe[param_group["name"]][key]["name"] = key
+            group_moe[param_group["name"]][key]["moe"] = True
             for ori_key in param_group.keys():
-                if ori_key != 'name':
-                    if ori_key == 'params':
-                        group_moe[param_group['name']][key][ori_key] = []
+                if ori_key != "name":
+                    if ori_key == "params":
+                        group_moe[param_group["name"]][key][ori_key] = []
                     else:
-                        group_moe[param_group['name']][key][ori_key] = param_group[ori_key]
+                        group_moe[param_group["name"]][key][ori_key] = param_group[ori_key]
     # Assign param
     for param_group in param_groups:
         new_params = []
-        for param in param_group['params']:
+        for param in param_group["params"]:
             if is_moe_param(param):
-                group_moe[param_group['name']][param.group_name]['params'].append(param)
+                group_moe[param_group["name"]][param.group_name]["params"].append(param)
                 # param_group['params'].remove(param)
             else:
                 new_params.append(param)
-        param_group['params'] = new_params
+        param_group["params"] = new_params
 
     # Flatten the moe groups
     if max_group_size is not None:
@@ -120,7 +119,7 @@ def split_params_into_different_moe_groups_for_optimizer(param_groups: Tuple[Dic
                 cur_group = []
                 all_groups = []
                 size_of_cur_group = 0
-                for param in v1['params']:
+                for param in v1["params"]:
                     if size_of_cur_group + param.numel() <= max_group_size:
                         cur_group.append(param)
                         size_of_cur_group += param.numel()
@@ -133,9 +132,9 @@ def split_params_into_different_moe_groups_for_optimizer(param_groups: Tuple[Dic
                 for group in all_groups:
                     new_dict = {}
                     for key, val in v1.items():
-                        if key != 'params':
+                        if key != "params":
                             new_dict[key] = val
-                    new_dict['params'] = group
+                    new_dict["params"] = group
                     param_groups.append(new_dict)
     else:
         for k, v in group_moe.items():

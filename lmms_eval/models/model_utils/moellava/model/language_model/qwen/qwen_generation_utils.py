@@ -5,13 +5,12 @@
 
 """Generation support."""
 
-from typing import Tuple, List, Union, Iterable
+from typing import Iterable, List, Tuple, Union
 
 import numpy as np
 import torch
 import torch.nn.functional as F
-from transformers import PreTrainedTokenizer
-from transformers import logging
+from transformers import PreTrainedTokenizer, logging
 from transformers.generation import LogitsProcessor
 
 logger = logging.get_logger(__name__)
@@ -47,9 +46,7 @@ def get_ltor_masks_and_position_ids(
         att_mask_batch = micro_batch_size
     else:
         att_mask_batch = 1
-    attention_mask = torch.tril(
-        torch.ones((att_mask_batch, seq_length, seq_length), device=data.device)
-    ).view(att_mask_batch, 1, seq_length, seq_length)
+    attention_mask = torch.tril(torch.ones((att_mask_batch, seq_length, seq_length), device=data.device)).view(att_mask_batch, 1, seq_length, seq_length)
 
     # Loss mask.
     loss_mask = torch.ones(data.size(), dtype=torch.float, device=data.device)
@@ -134,9 +131,7 @@ def make_context(
         nl_tokens = tokenizer.encode("\n")
 
         def _tokenize_str(role, content):
-            return f"{role}\n{content}", tokenizer.encode(
-                role, allowed_special=set()
-            ) + nl_tokens + tokenizer.encode(content, allowed_special=set())
+            return f"{role}\n{content}", tokenizer.encode(role, allowed_special=set()) + nl_tokens + tokenizer.encode(content, allowed_special=set())
 
         system_text, system_tokens_part = _tokenize_str("system", system)
         system_tokens = im_start_tokens + system_tokens_part + im_end_tokens
@@ -147,19 +142,13 @@ def make_context(
         for turn_query, turn_response in reversed(history):
             query_text, query_tokens_part = _tokenize_str("user", turn_query)
             query_tokens = im_start_tokens + query_tokens_part + im_end_tokens
-            response_text, response_tokens_part = _tokenize_str(
-                "assistant", turn_response
-            )
+            response_text, response_tokens_part = _tokenize_str("assistant", turn_response)
             response_tokens = im_start_tokens + response_tokens_part + im_end_tokens
 
             next_context_tokens = nl_tokens + query_tokens + nl_tokens + response_tokens
-            prev_chat = (
-                f"\n{im_start}{query_text}{im_end}\n{im_start}{response_text}{im_end}"
-            )
+            prev_chat = f"\n{im_start}{query_text}{im_end}\n{im_start}{response_text}{im_end}"
 
-            current_context_size = (
-                len(system_tokens) + len(next_context_tokens) + len(context_tokens)
-            )
+            current_context_size = len(system_tokens) + len(next_context_tokens) + len(context_tokens)
             if current_context_size < max_window_size:
                 context_tokens = next_context_tokens + context_tokens
                 raw_text = prev_chat + raw_text
@@ -168,16 +157,7 @@ def make_context(
 
         context_tokens = system_tokens + context_tokens
         raw_text = f"{im_start}{system_text}{im_end}" + raw_text
-        context_tokens += (
-            nl_tokens
-            + im_start_tokens
-            + _tokenize_str("user", query)[1]
-            + im_end_tokens
-            + nl_tokens
-            + im_start_tokens
-            + tokenizer.encode("assistant")
-            + nl_tokens
-        )
+        context_tokens += nl_tokens + im_start_tokens + _tokenize_str("user", query)[1] + im_end_tokens + nl_tokens + im_start_tokens + tokenizer.encode("assistant") + nl_tokens
         raw_text += f"\n{im_start}user\n{query}{im_end}\n{im_start}assistant\n"
 
     elif chat_format == "raw":
@@ -198,7 +178,7 @@ def _decode_default(
     raw_text_len: int,
     verbose: bool = False,
     return_end_reason: bool = False,
-    errors: str='replace',
+    errors: str = "replace",
 ):
     trim_decode_tokens = tokenizer.decode(tokens, errors=errors)[raw_text_len:]
     if verbose:
@@ -223,16 +203,7 @@ def _decode_default(
 
 
 def _decode_chatml(
-    tokens: List[int],
-    *,
-    stop_words: List[str],
-    eod_token_ids: List[int],
-    tokenizer: PreTrainedTokenizer,
-    raw_text_len: int,
-    context_length: int,
-    verbose: bool = False,
-    return_end_reason: bool = False,
-    errors: str='replace'
+    tokens: List[int], *, stop_words: List[str], eod_token_ids: List[int], tokenizer: PreTrainedTokenizer, raw_text_len: int, context_length: int, verbose: bool = False, return_end_reason: bool = False, errors: str = "replace"
 ):
     end_reason = f"Gen length {len(tokens)}"
     eod_token_idx = context_length
@@ -266,7 +237,7 @@ def decode_tokens(
     chat_format: str,
     verbose: bool = False,
     return_end_reason: bool = False,
-    errors: str="replace",
+    errors: str = "replace",
 ) -> str:
     if torch.is_tensor(tokens):
         tokens = tokens.cpu().numpy().tolist()
@@ -314,40 +285,18 @@ class StopWordsLogitsProcessor(LogitsProcessor):
     def __init__(self, stop_words_ids: Iterable[Iterable[int]], eos_token_id: int):
 
         if not isinstance(stop_words_ids, List) or len(stop_words_ids) == 0:
-            raise ValueError(
-                f"`stop_words_ids` has to be a non-emtpy list, but is {stop_words_ids}."
-            )
+            raise ValueError(f"`stop_words_ids` has to be a non-emtpy list, but is {stop_words_ids}.")
         if any(not isinstance(bad_word_ids, list) for bad_word_ids in stop_words_ids):
-            raise ValueError(
-                f"`stop_words_ids` has to be a list of lists, but is {stop_words_ids}."
-            )
-        if any(
-            any(
-                (not isinstance(token_id, (int, np.integer)) or token_id < 0)
-                for token_id in stop_word_ids
-            )
-            for stop_word_ids in stop_words_ids
-        ):
-            raise ValueError(
-                f"Each list in `stop_words_ids` has to be a list of positive integers, but is {stop_words_ids}."
-            )
+            raise ValueError(f"`stop_words_ids` has to be a list of lists, but is {stop_words_ids}.")
+        if any(any((not isinstance(token_id, (int, np.integer)) or token_id < 0) for token_id in stop_word_ids) for stop_word_ids in stop_words_ids):
+            raise ValueError(f"Each list in `stop_words_ids` has to be a list of positive integers, but is {stop_words_ids}.")
 
-        self.stop_words_ids = list(
-            filter(
-                lambda bad_token_seq: bad_token_seq != [eos_token_id], stop_words_ids
-            )
-        )
+        self.stop_words_ids = list(filter(lambda bad_token_seq: bad_token_seq != [eos_token_id], stop_words_ids))
         self.eos_token_id = eos_token_id
         for stop_token_seq in self.stop_words_ids:
-            assert (
-                len(stop_token_seq) > 0
-            ), "Stop words token sequences {} cannot have an empty list".format(
-                stop_words_ids
-            )
+            assert len(stop_token_seq) > 0, "Stop words token sequences {} cannot have an empty list".format(stop_words_ids)
 
-    def __call__(
-        self, input_ids: torch.LongTensor, scores: torch.FloatTensor
-    ) -> torch.FloatTensor:
+    def __call__(self, input_ids: torch.LongTensor, scores: torch.FloatTensor) -> torch.FloatTensor:
         stopped_samples = self._calc_stopped_samples(input_ids)
         for i, should_stop in enumerate(stopped_samples):
             if should_stop:

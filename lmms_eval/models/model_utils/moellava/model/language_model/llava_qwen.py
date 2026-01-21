@@ -16,18 +16,23 @@
 from typing import List, Optional, Tuple, Union
 
 import torch
+import torch.distributed as dist
 import torch.nn as nn
-
 from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
-from .qwen.modeling_qwen import QWenLMHeadModel, QWenModel, _import_flash_attn, SUPPORT_BF16, SUPPORT_FP16, \
-    SUPPORT_CUDA, logger
-from .qwen.configuration_qwen import QWenConfig
-
 from transformers.modeling_outputs import CausalLMOutputWithPast
 
-from .qwen.tokenization_qwen import QWenTokenizer
 from ..llava_arch import LlavaMetaModel, LlavaQWenMetaForCausalLM
-import torch.distributed as dist
+from .qwen.configuration_qwen import QWenConfig
+from .qwen.modeling_qwen import (
+    SUPPORT_BF16,
+    SUPPORT_CUDA,
+    SUPPORT_FP16,
+    QWenLMHeadModel,
+    QWenModel,
+    _import_flash_attn,
+    logger,
+)
+from .qwen.tokenization_qwen import QWenTokenizer
 
 
 class LlavaQWenConfig(QWenConfig):
@@ -43,6 +48,7 @@ class LlavaQWenModel(LlavaMetaModel, QWenModel):
     def embed_tokens(self, input_ids):
         return self.wte(input_ids)
 
+
 class LlavaQWenForCausalLM(QWenLMHeadModel, LlavaQWenMetaForCausalLM):
     config_class = LlavaQWenConfig
 
@@ -50,42 +56,30 @@ class LlavaQWenForCausalLM(QWenLMHeadModel, LlavaQWenMetaForCausalLM):
         super(QWenLMHeadModel, self).__init__(config)
         # import ipdb
         # ipdb.set_trace()
-        assert (
-                config.bf16 + config.fp16 + config.fp32 <= 1
-        ), "Only one of \"bf16\", \"fp16\", \"fp32\" can be true"
+        assert config.bf16 + config.fp16 + config.fp32 <= 1, 'Only one of "bf16", "fp16", "fp32" can be true'
 
         # autoset_precision = config.bf16 + config.fp16 + config.fp32 == 0
         autoset_precision = True
 
         if autoset_precision:
             if SUPPORT_BF16:
-                logger.warn(
-                    "The model is automatically converting to bf16 for faster inference. "
-                    "If you want to disable the automatic precision, please manually add bf16/fp16/fp32=True to \"AutoModelForCausalLM.from_pretrained\"."
-                )
+                logger.warn("The model is automatically converting to bf16 for faster inference. " 'If you want to disable the automatic precision, please manually add bf16/fp16/fp32=True to "AutoModelForCausalLM.from_pretrained".')
                 config.bf16 = True
             elif SUPPORT_FP16:
-                logger.warn(
-                    "The model is automatically converting to fp16 for faster inference. "
-                    "If you want to disable the automatic precision, please manually add bf16/fp16/fp32=True to \"AutoModelForCausalLM.from_pretrained\"."
-                )
+                logger.warn("The model is automatically converting to fp16 for faster inference. " 'If you want to disable the automatic precision, please manually add bf16/fp16/fp32=True to "AutoModelForCausalLM.from_pretrained".')
                 config.fp16 = True
             else:
                 config.fp32 = True
 
         if config.bf16 and SUPPORT_CUDA and not SUPPORT_BF16:
-            logger.warn(
-                "Your device does NOT seem to support bf16, you can switch to fp16 or fp32 by by passing fp16/fp32=True in \"AutoModelForCausalLM.from_pretrained\".")
+            logger.warn('Your device does NOT seem to support bf16, you can switch to fp16 or fp32 by by passing fp16/fp32=True in "AutoModelForCausalLM.from_pretrained".')
         if config.fp16 and SUPPORT_CUDA and not SUPPORT_FP16:
-            logger.warn(
-                "Your device does NOT support faster inference with fp16, please switch to fp32 which is likely to be faster")
+            logger.warn("Your device does NOT support faster inference with fp16, please switch to fp32 which is likely to be faster")
         if config.fp32:
             if SUPPORT_BF16:
-                logger.warn(
-                    "Your device support faster inference by passing bf16=True in \"AutoModelForCausalLM.from_pretrained\".")
+                logger.warn('Your device support faster inference by passing bf16=True in "AutoModelForCausalLM.from_pretrained".')
             elif SUPPORT_FP16:
-                logger.warn(
-                    "Your device support faster inference by passing fp16=True in \"AutoModelForCausalLM.from_pretrained\".")
+                logger.warn('Your device support faster inference by passing fp16=True in "AutoModelForCausalLM.from_pretrained".')
 
         if config.use_flash_attn == "auto":
             # if config.bf16 or config.fp16:
@@ -137,40 +131,26 @@ class LlavaQWenForCausalLM(QWenLMHeadModel, LlavaQWenMetaForCausalLM):
         # ipdb.set_trace()
         # print(f'rank {dist.get_rank()}', 'before prepare_inputs_labels_for_multimodal')
         if inputs_embeds is None:
-            (
-                input_ids,
-                position_ids,
-                attention_mask,
-                past_key_values,
-                inputs_embeds,
-                labels
-            ) = self.prepare_inputs_labels_for_multimodal(
-                input_ids,
-                position_ids,
-                attention_mask,
-                past_key_values,
-                labels,
-                images
-            )
+            (input_ids, position_ids, attention_mask, past_key_values, inputs_embeds, labels) = self.prepare_inputs_labels_for_multimodal(input_ids, position_ids, attention_mask, past_key_values, labels, images)
 
         # dist.barrier()
         # print(f'rank {dist.get_rank()}', 'after prepare_inputs_labels_for_multimodal')
 
         out = super().forward(
-                input_ids=input_ids,
-                past_key_values=past_key_values,
-                attention_mask=attention_mask,
-                token_type_ids=token_type_ids,
-                position_ids=position_ids,
-                head_mask=head_mask,
-                inputs_embeds=inputs_embeds,
-                encoder_hidden_states=encoder_hidden_states,
-                encoder_attention_mask=encoder_attention_mask,
-                labels=labels,
-                use_cache=use_cache,
-                output_attentions=output_attentions,
-                output_hidden_states=output_hidden_states,
-                return_dict=return_dict,
+            input_ids=input_ids,
+            past_key_values=past_key_values,
+            attention_mask=attention_mask,
+            token_type_ids=token_type_ids,
+            position_ids=position_ids,
+            head_mask=head_mask,
+            inputs_embeds=inputs_embeds,
+            encoder_hidden_states=encoder_hidden_states,
+            encoder_attention_mask=encoder_attention_mask,
+            labels=labels,
+            use_cache=use_cache,
+            output_attentions=output_attentions,
+            output_hidden_states=output_hidden_states,
+            return_dict=return_dict,
         )
         # dist.barrier()
         # print(f'rank {dist.get_rank()}', 'after LLM')
@@ -180,11 +160,9 @@ class LlavaQWenForCausalLM(QWenLMHeadModel, LlavaQWenMetaForCausalLM):
         # import ipdb
         # ipdb.set_trace()
         images = kwargs.pop("images", None)
-        _inputs = super().prepare_inputs_for_generation(
-            input_ids, past_key_values=past_key_values, inputs_embeds=inputs_embeds, **kwargs
-        )
+        _inputs = super().prepare_inputs_for_generation(input_ids, past_key_values=past_key_values, inputs_embeds=inputs_embeds, **kwargs)
         if images is not None:
-            _inputs['images'] = images
+            _inputs["images"] = images
         return _inputs
 
 
