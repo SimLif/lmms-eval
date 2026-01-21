@@ -1,0 +1,6 @@
+group: food101
+task:
+  - food101_in
+  - food101_ood
+metadata:
+  - version: 1.0

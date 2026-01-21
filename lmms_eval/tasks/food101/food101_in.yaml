@@ -1,44 +1,31 @@
-tag: medmoe_vqa
-dataset_path: /project/c4gcot/datasets/medmoe-vqa-rad
+dataset_path: /project/c4gcot/datasets/food101-mini
 dataset_kwargs:
   token: True
-task: "vqa_rad_open"
-test_split: test_open
+task: "food101_in"
+test_split: test_in
 output_type: generate_until
-doc_to_visual: !function utils.vqa_rad_doc_to_visual
-doc_to_text: !function utils.vqa_rad_doc_to_text
-doc_to_target: "answer"
+doc_to_visual: !function utils.food101_doc_to_visual
+doc_to_text: !function utils.food101_doc_to_text
+doc_to_target: "label"
 generation_kwargs:
   max_new_tokens: 1024
   temperature: 0
   top_p: 1.0
   num_beams: 1
   do_sample: false
-  answer_type: "open"
+  answer_type: "closed"
 # The return value of process_results will be used by metrics
-process_results: !function utils.vqa_rad_open_process_results
+process_results: !function utils.food101_process_results
 # Note that the metric name can be either a registed metric function (such as the case for GQA) or a key name returned by process_results
 metric_list:
-  - metric: f1
-    aggregation: mean
-    higher_is_better: true 
-  - metric: precision
-    aggregation: mean
-    higher_is_better: true
-  - metric: recall
-    aggregation: mean
-    higher_is_better: true
-  - metric: recall_old
-    aggregation: mean
-    higher_is_better: true
-  - metric: bleu
+  - metric: accuracy
     aggregation: mean
     higher_is_better: true
 lmms_eval_specific_kwargs:
   default:
     pre_prompt: ""
     post_prompt: ""
-    # post_prompt: "\nPlease answer the question concisely."
+    # post_prompt: "\nPlease output 'yes' or 'no'(no extra output)."
   gpt4v:
     pre_prompt: ""
     post_prompt: "\nAnswer the question with Yes or No."
@@ -51,5 +38,11 @@ lmms_eval_specific_kwargs:
   xcomposer2_4khd:
     pre_prompt: "[UNUSED_TOKEN_146]user\n"
     post_prompt: " Answer this question briefly[UNUSED_TOKEN_145]\n[UNUSED_TOKEN_146]assistant\n"
+  moe_llava_qwen:
+    pre_prompt: ""
+    post_prompt: "\nAnswer the question with Yes or No."
+  # qwen2_vl:
+  #   pre_prompt: ""
+  #   post_prompt: "\nAnswer the question with Yes or No:"
 metadata:
   - version: 0.0
