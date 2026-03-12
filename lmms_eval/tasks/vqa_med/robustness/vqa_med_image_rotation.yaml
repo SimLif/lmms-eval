@@ -1,0 +1,42 @@
+dataset_path: simwit/vqa-med-robustness
+dataset_kwargs:
+  token: true
+task: "vqa_med_image_rotation"
+test_split: test_image_rotation
+output_type: generate_until
+doc_to_visual: !function utils.vqa_med_doc_to_visual
+doc_to_text: !function utils.vqa_med_doc_to_text
+doc_to_target: "answer"
+generation_kwargs:
+  max_new_tokens: 1024
+  temperature: 0
+  top_p: 1.0
+  num_beams: 1
+  do_sample: false
+  answer_type: "open"
+process_results: !function utils.vqa_med_process_results
+metric_list:
+  - metric: f1
+    aggregation: mean
+    higher_is_better: true
+  - metric: precision
+    aggregation: mean
+    higher_is_better: true
+  - metric: recall
+    aggregation: mean
+    higher_is_better: true
+  - metric: recall_old
+    aggregation: mean
+    higher_is_better: true
+  - metric: bleu
+    aggregation: mean
+    higher_is_better: true
+lmms_eval_specific_kwargs:
+  default:
+    pre_prompt: ""
+    post_prompt: "\nPlease answer the question concisely."
+  think:
+    pre_prompt: ""
+    post_prompt: "\nPlease answer the question concisely and put the answer in one \"\\boxed{}\"."
+metadata:
+  version: 1.0

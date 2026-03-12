@@ -1,0 +1,10 @@
+group: path_vqa_mini
+task:
+  - path_vqa_mini_open
+  - path_vqa_mini_closed
+aggregate_metric_list:
+  - metric: accuracy
+    aggregation: mean
+    weight_by_size: true
+metadata:
+  version: 1.0

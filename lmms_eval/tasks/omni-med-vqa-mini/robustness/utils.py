@@ -1,5 +1,5 @@
 """
-Utility functions for OmniMedVQA-mini evaluation.
+Utility functions for OmniMedVQA-mini robustness evaluation.
 """
 
 from lmms_eval.tasks._task_utils.answer_utils import (

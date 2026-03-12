@@ -1,0 +1,16 @@
+group: mmlu_medical
+task:
+  - mmlu_medical_anatomy
+  - mmlu_medical_clinical_knowledge
+  - mmlu_medical_college_biology
+  - mmlu_medical_college_medicine
+  - mmlu_medical_medical_genetics
+  - mmlu_medical_professional_medicine
+  - mmlu_medical_nutrition
+  - mmlu_medical_virology
+  - mmlu_medical_high_school_biology
+aggregate_metric_list:
+  - metric: accuracy
+    weight_by_size: true
+metadata:
+  version: 1.0

@@ -1,0 +1,5 @@
+group: mmmu_medical
+task:
+  - mmmu_medical_val
+metadata:
+  version: 1.0

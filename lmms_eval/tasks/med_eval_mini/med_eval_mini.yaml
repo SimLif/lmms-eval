@@ -1,0 +1,15 @@
+group: med_eval_mini
+task:
+  # Multimodal VQA (8 tasks, ~11.6K)
+  - omni_med_vqa_mini_v2   # 2,000 (新建分层采样)
+  - path_vqa_mini           # 1,500 (新建降采样)
+  - slake                   # 2,094 (复用现有)
+  - pmc_vqa                 # 2,000 (复用现有)
+  - medxpertqa_mm           # 2,000 (复用现有)
+  - vqa_med                 # 1,382 (复用现有)
+  - vqa_rad                 # 451 (复用现有)
+  - mmmu_medical            # 150 (复用现有)
+  # Text QA Sentinel (1 task, 500)
+  - pubmedqa               # 500 (复用现有)
+metadata:
+  version: 1.0

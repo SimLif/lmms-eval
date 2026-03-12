@@ -1,8 +1,10 @@
-dataset_path: simwit/omni-med-vqa-mini
+# tag: medvqa_robustness
+tag: text_proportional_char_substitution
+dataset_path: simwit/omni-med-vqa-mini-robustness
 dataset_kwargs:
-  token: true
-task: "omni_med_vqa_mini"
-test_split: test
+  token: True
+task: "omni_med_vqa_mini_text_proportional_char_substitution"
+test_split: test_text_proportional_char_substitution
 output_type: generate_until
 doc_to_visual: !function utils.omni_med_vqa_mini_doc_to_visual
 doc_to_text: !function utils.omni_med_vqa_mini_doc_to_text

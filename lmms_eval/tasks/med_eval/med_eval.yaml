@@ -1,0 +1,24 @@
+group: med_eval
+task:
+  # Multimodal VQA
+  - vqa_rad
+  - slake
+  - path_vqa
+  - pmc_vqa
+  - vqa_med
+  - omni_med_vqa
+  - mmmu_medical
+  - medxpertqa_mm
+  # Text-only QA
+  - mmlu_medical
+  - pubmedqa
+  - medmcqa
+  - medqa_usmle
+  - medbullets
+  - medxpertqa_text
+  - supergpqa_medicine
+  # Report Generation
+  - mimic_cxr
+  - iu_xray
+metadata:
+  version: 1.0

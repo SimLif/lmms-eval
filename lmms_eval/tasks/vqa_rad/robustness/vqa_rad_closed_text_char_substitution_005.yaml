@@ -1,0 +1,34 @@
+# tag: medvqa_robustness
+tag: text_char_substitution_005
+dataset_path: simwit/vqa-rad-robustness
+dataset_kwargs:
+  token: True
+task: "vqa_rad_closed_text_char_substitution_005"
+test_split: test_closed_text_char_substitution_005
+output_type: generate_until
+doc_to_visual: !function utils.vqa_rad_doc_to_visual
+doc_to_text: !function utils.vqa_rad_doc_to_text
+doc_to_target: "answer"
+generation_kwargs:
+  max_new_tokens: 1024
+  temperature: 0
+  top_p: 1.0
+  num_beams: 1
+  do_sample: false
+  answer_type: "closed"
+# The return value of process_results will be used by metrics
+process_results: !function utils.vqa_rad_closed_process_results
+# Note that the metric name can be either a registed metric function (such as the case for GQA) or a key name returned by process_results
+metric_list:
+  - metric: accuracy
+    aggregation: mean
+    higher_is_better: true
+lmms_eval_specific_kwargs:
+  default:
+    pre_prompt: ""
+    post_prompt: "\nAnswer the question using a single word or phrase."
+  think:
+    pre_prompt: ""
+    post_prompt: "\nAnswer the question using a single word or phrase and put the answer in one \"\\boxed{}\"."
+metadata:
+  - version: 0.0

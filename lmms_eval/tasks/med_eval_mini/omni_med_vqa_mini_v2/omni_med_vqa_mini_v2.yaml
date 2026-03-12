@@ -1,24 +1,24 @@
-dataset_path: simwit/omni-med-vqa-mini
+dataset_path: simwit/omni-med-vqa-mini-v2
 dataset_kwargs:
   token: true
-task: "omni_med_vqa_mini"
+task: "omni_med_vqa_mini_v2"
 test_split: test
 output_type: generate_until
-doc_to_visual: !function utils.omni_med_vqa_mini_doc_to_visual
-doc_to_text: !function utils.omni_med_vqa_mini_doc_to_text
-doc_to_target: "label"
+doc_to_visual: !function utils.omni_med_vqa_mini_v2_doc_to_visual
+doc_to_text: !function utils.omni_med_vqa_mini_v2_doc_to_text
+doc_to_target: !function utils.omni_med_vqa_mini_v2_doc_to_target
 generation_kwargs:
   max_new_tokens: 1024
   temperature: 0
   top_p: 1.0
   num_beams: 1
   do_sample: false
-# The return value of process_results will be used by metrics
-process_results: !function utils.omni_med_vqa_mini_process_results
-# Note that the metric name can be either a registed metric function (such as the case for GQA) or a key name returned by process_results
+process_results: !function utils.omni_med_vqa_mini_v2_process_results
+cluster_key: dataset
+score_key: score
 metric_list:
   - metric: accuracy
-    aggregation: mean
+    aggregation: !function utils.omni_med_vqa_mini_v2_aggregate_accuracy
     higher_is_better: true
 lmms_eval_specific_kwargs:
   default:
@@ -28,4 +28,4 @@ lmms_eval_specific_kwargs:
     pre_prompt: ""
     post_prompt: "\nAnswer with the option's letter from the given choices and put the letter in one \"\\boxed{}\"."
 metadata:
-  - version: 0.0
+  version: 1.0

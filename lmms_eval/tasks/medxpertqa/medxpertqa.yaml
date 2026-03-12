@@ -1,0 +1,6 @@
+group: medxpertqa
+task:
+  - medxpertqa_mm
+  - medxpertqa_text
+metadata:
+  version: 1.0

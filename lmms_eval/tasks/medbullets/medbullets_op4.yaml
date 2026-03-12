@@ -1,0 +1,25 @@
+dataset_path: tuenguyen/Medical-Eval-MedBullets_op4
+dataset_kwargs:
+  token: true
+task: "medbullets_op4"
+test_split: train
+output_type: generate_until
+doc_to_text: !function utils.medbullets_op4_doc_to_text
+doc_to_target: "answer_idx"
+generation_kwargs:
+  max_new_tokens: 1024
+  temperature: 0
+process_results: !function utils.medbullets_op4_process_results
+metric_list:
+  - metric: accuracy
+    aggregation: mean
+    higher_is_better: true
+lmms_eval_specific_kwargs:
+  default:
+    pre_prompt: ""
+    post_prompt: "\nAnswer with the option's letter from the given choices directly."
+  think:
+    pre_prompt: ""
+    post_prompt: "\nAnswer with the option's letter from the given choices and put the letter in one \"\\boxed{}\"."
+metadata:
+  version: 1.0

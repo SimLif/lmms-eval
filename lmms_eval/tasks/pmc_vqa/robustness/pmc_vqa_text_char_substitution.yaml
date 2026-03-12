@@ -1,11 +1,13 @@
-dataset_path: simwit/omni-med-vqa-mini
+# tag: medvqa_robustness
+tag: text_char_substitution
+dataset_path: simwit/pmc-vqa-robustness
 dataset_kwargs:
-  token: true
-task: "omni_med_vqa_mini"
-test_split: test
+  token: True
+task: "pmc_vqa_text_char_substitution"
+test_split: test_text_char_substitution
 output_type: generate_until
-doc_to_visual: !function utils.omni_med_vqa_mini_doc_to_visual
-doc_to_text: !function utils.omni_med_vqa_mini_doc_to_text
+doc_to_visual: !function utils.pmc_vqa_doc_to_visual
+doc_to_text: !function utils.pmc_vqa_doc_to_text
 doc_to_target: "label"
 generation_kwargs:
   max_new_tokens: 1024
@@ -14,7 +16,7 @@ generation_kwargs:
   num_beams: 1
   do_sample: false
 # The return value of process_results will be used by metrics
-process_results: !function utils.omni_med_vqa_mini_process_results
+process_results: !function utils.pmc_vqa_process_results
 # Note that the metric name can be either a registed metric function (such as the case for GQA) or a key name returned by process_results
 metric_list:
   - metric: accuracy
