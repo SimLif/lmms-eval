@@ -4,6 +4,7 @@ import gc
 import hashlib
 import json
 import os
+import shutil
 import unicodedata
 from typing import Any, Dict, List, Optional, Tuple, Type, TypeVar
 
@@ -51,11 +52,15 @@ class lmms(abc.ABC):
 
     def generate_cache_folder_hash_name(self, model_name: str):
         """
-        Generate a cache hash for a model
+        Generate a cache hash for a model.
+
+        The hash includes both the model identifier and the task list so that
+        different pretrained checkpoints (e.g. 2B vs 4B) each get their own
+        cache directory.
         """
         task_dict_keys = list(self.task_dict.keys())
         class_name = type(self).__name__
-        hash_string = "|".join(task_dict_keys)
+        hash_string = model_name + "|" + "|".join(task_dict_keys)
 
         text_hash = unicodedata.normalize("NFC", hash_string)
         text_hash = text_hash.replace("\r\n", "\n").replace("\r", "\n")
@@ -103,6 +108,19 @@ class lmms(abc.ABC):
         """
         os.makedirs(self.get_model_cache_dir, exist_ok=True)
         return self.get_model_cache_dir
+
+    def cleanup_cache(self) -> None:
+        """Remove cache directory after successful evaluation.
+
+        Only rank 0 performs the deletion to avoid races when multiple
+        processes share the same filesystem cache directory.
+        """
+        rank, _ = self.get_rank_and_world_size()
+        if rank != 0:
+            return
+        if self.initialized_cache_dir and os.path.isdir(self._cache_dir):
+            shutil.rmtree(self._cache_dir, ignore_errors=True)
+            eval_logger.info(f"Cleaned up cache directory: {self._cache_dir}")
 
     def load_cache(self):
         if LMMS_EVAL_USE_CACHE == "True":
@@ -160,7 +178,7 @@ class lmms(abc.ABC):
         """
         try:
             ctx, doc_to_messages, gen_kwargs, doc_id, task, split = request.args
-        except Exception as e:
+        except Exception:
             contexts, gen_kwargs, doc_to_visual, doc_id, task, split = request.arguments
         return doc_id
 
@@ -204,6 +222,29 @@ class lmms(abc.ABC):
         """
         if LMMS_EVAL_USE_CACHE == "True":
             self._append_request_response_to_cache(request, response, request.task_name)
+
+    def cache_response(
+        self, doc_id: Any, task_name: str, response: str
+    ) -> None:
+        """Write a single response to the incremental JSONL cache.
+
+        Called from inside ``generate_until`` batch loops so that partial
+        progress is persisted even if the process crashes mid-inference.
+        Unlike ``add_request_response_to_cache`` this does not require an
+        ``Instance`` object.
+        """
+        if LMMS_EVAL_USE_CACHE != "True":
+            return
+        cache_dir = self.ensure_model_cache_dir()
+        rank, world_size = self.get_rank_and_world_size()
+        base = f"{task_name}_rank{rank}_world_size{world_size}.jsonl"
+        file_path = os.path.join(cache_dir, base)
+
+        record = {"doc_id": doc_id, "response": response}
+        self.cache_dict[task_name][doc_id] = record
+        line = json.dumps(record, ensure_ascii=False)
+        with open(file_path, "a", encoding="utf-8") as f:
+            f.write(line + "\n")
 
     def get_response_from_cache(self, requests: List[Instance]) -> Tuple[List[str], List[Instance]]:
         """

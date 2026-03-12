@@ -1,27 +1,29 @@
 import collections
-import inspect
 import itertools
 import json
 import os
 import random
-import sys
-import time
-from collections import defaultdict
-from dataclasses import dataclass
 from typing import Callable, List, Optional, Union
 
 import numpy as np
 import torch
 import torch.distributed as dist
 from accelerate import Accelerator
-from datasets import Image, Sequence
 from loguru import logger as eval_logger
 from tqdm import tqdm
 
 import lmms_eval.api
 import lmms_eval.api.metrics
 import lmms_eval.api.registry
+from lmms_eval.api.registry import get_aggregation
+from lmms_eval import models
+from lmms_eval.baselines import (
+    BASELINE_REGISTRY,
+    get_baseline_display_name,
+    load_baseline,
+)
 from lmms_eval.evaluator_utils import (
+    compute_baseline_comparison,
     consolidate_group_results,
     consolidate_results,
     get_sample_size,
@@ -33,7 +35,6 @@ from lmms_eval.evaluator_utils import (
 )
 from lmms_eval.llm_judge.launcher import get_launcher
 from lmms_eval.loggers.evaluation_tracker import EvaluationTracker
-from lmms_eval.models import get_model
 from lmms_eval.tasks import TaskManager, get_task_dict
 from lmms_eval.utils import (
     create_iterator,
@@ -42,7 +43,6 @@ from lmms_eval.utils import (
     handle_non_serializable,
     hash_string,
     is_multimodal_content,
-    make_table,
     positional_deprecated,
     run_task_tests,
     simple_parse_args_string,
@@ -64,6 +64,7 @@ def simple_evaluate(
     rewrite_requests_cache: bool = False,
     delete_requests_cache: bool = False,
     limit: Optional[Union[int, float]] = None,
+    offset: int = 0,
     bootstrap_iters: int = 100000,
     check_integrity: bool = False,
     write_out: bool = False,
@@ -84,6 +85,8 @@ def simple_evaluate(
     distributed_executor_backend: str = "accelerate",
     cli_args=None,
     force_simple: bool = False,
+    num_samples: int = 1,
+    baseline: Optional[str] = None,
 ):
     """Instantiate and evaluate a model on a list of tasks.
 
@@ -112,6 +115,8 @@ def simple_evaluate(
         Deletes all of the request cache if set to `True`. `None` if not desired.
     :param limit: int or float, optional
         Limit the number of examples per task (only use this for testing), If <1, limit is a percentage of the total number of examples.
+    :param offset: int, optional
+        Start evaluation from this dataset index for each task.
     :param bootstrap_iters:
         Number of iterations for bootstrap statistics, used when calculating stderrs. set to 0 for no stderr calculations to be performed.
     :param check_integrity: bool
@@ -167,9 +172,15 @@ def simple_evaluate(
 
     if gen_kwargs:
         gen_kwargs = simple_parse_args_string(gen_kwargs)
-        eval_logger.warning(f"generation_kwargs specified through cli, these settings will be used over set parameters in yaml tasks.")
+        eval_logger.warning("generation_kwargs specified through cli, these settings will be used over set parameters in yaml tasks.")
         if gen_kwargs == "":
             gen_kwargs = None
+    else:
+        gen_kwargs = None
+
+    # Bridge --use_llm_judge CLI flag to environment variable
+    if cli_args is not None and getattr(cli_args, "use_llm_judge", False):
+        os.environ["USE_LLM_JUDGE"] = "true"
 
     if model_args is None:
         model_args = ""
@@ -187,7 +198,7 @@ def simple_evaluate(
     if isinstance(model, str):
         if model_args is None:
             model_args = ""
-        lm = lmms_eval.models.get_model(model, force_simple).create_from_arg_string(
+        lm = models.get_model(model, force_simple).create_from_arg_string(
             model_args,
             {
                 "batch_size": batch_size,
@@ -221,6 +232,9 @@ def simple_evaluate(
                 if "generate_until" in task_obj.get_config("output_type"):
                     if gen_kwargs is not None:
                         task_obj.set_config(key="generation_kwargs", value=gen_kwargs, update=True)
+                        # Check for think_mode in gen_kwargs and switch lmms_eval_specific_kwargs
+                        if gen_kwargs.get("think_mode", False):
+                            task_obj.switch_to_think_mode()
 
                 if predict_only:
                     eval_logger.info(f"Processing {task_name} in output-only mode. Metrics will not be calculated!")
@@ -242,6 +256,22 @@ def simple_evaluate(
                 # fewshot_random_seed set for tasks, even with a default num_fewshot (e.g. in the YAML file)
                 task_obj.set_fewshot_seed(seed=fewshot_random_seed)
                 # eval_logger.info(f"Setting fewshot random generator seed to {fewshot_random_seed}")
+
+                # Inject llm_judge metric when enabled
+                if os.environ.get("USE_LLM_JUDGE", "false").lower() == "true":
+                    task_obj._aggregation_list["llm_judge"] = get_aggregation("mean")
+                    task_obj._higher_is_better["llm_judge"] = True
+                    # Also register accuracy aggregation for open-ended tasks
+                    # so that open+closed groups can compute overall accuracy
+                    if "accuracy" not in task_obj._aggregation_list:
+                        task_obj._aggregation_list["accuracy"] = get_aggregation("mean")
+                        task_obj._higher_is_better["accuracy"] = True
+
+                # Handle num_samples for model stability measurement (k-samples mode)
+                if num_samples > 1:
+                    default_repeats = task_obj.get_config("repeats") or 1
+                    eval_logger.info(f"[Model Stability] Setting repeats={num_samples} for {task_name} (was: {default_repeats})")
+                    task_obj.set_config(key="repeats", value=num_samples)
 
                 adjusted_task_dict[task_name] = task_obj
 
@@ -270,6 +300,7 @@ def simple_evaluate(
         lm=lm,
         task_dict=task_dict,
         limit=limit,
+        offset=offset,
         cache_requests=cache_requests,
         rewrite_requests_cache=rewrite_requests_cache,
         bootstrap_iters=bootstrap_iters,
@@ -308,6 +339,7 @@ def simple_evaluate(
                 "device": device,
                 "use_cache": use_cache,
                 "limit": limit,
+                "offset": offset,
                 "bootstrap_iters": bootstrap_iters,
                 "gen_kwargs": gen_kwargs,
                 "random_seed": random_seed,
@@ -320,6 +352,63 @@ def simple_evaluate(
         results["date"] = datetime_str
         # add_env_info(results)  # additional environment info to results
         # add_tokenizer_info(results, lm)  # additional info about tokenizer
+
+        # Baseline comparison (paired t-test)
+        if baseline:
+            baseline_display_name = get_baseline_display_name(baseline)
+
+            for task_name in results.get("results", {}).keys():
+                try:
+                    baseline_scores_dict, baseline_agg = load_baseline(baseline, task_name)
+                    # Extract current scores from samples
+                    if "samples" in results and task_name in results["samples"]:
+                        current_samples = results["samples"][task_name]
+                        # Get score_key from task config, default to "score"
+                        task_config = results.get("configs", {}).get(task_name, {})
+                        score_key = task_config.get("score_key", "score")
+
+                        current_scores = []
+                        baseline_scores = []
+                        for sample in current_samples:
+                            doc_id = sample.get("doc_id")
+                            if doc_id in baseline_scores_dict:
+                                # Extract score: first try exact score_key, then search for *_score fields
+                                score = None
+                                if score_key in sample:
+                                    val = sample[score_key]
+                                    if isinstance(val, (int, float)):
+                                        score = float(val)
+                                    elif isinstance(val, dict) and "score" in val:
+                                        score = float(val["score"])
+                                # Fallback: search for fields ending with "_score" (e.g., videomme_perception_score)
+                                if score is None:
+                                    for key in sample:
+                                        if key.endswith("_score") and key != score_key:
+                                            val = sample[key]
+                                            if isinstance(val, (int, float)):
+                                                score = float(val)
+                                                break
+                                            elif isinstance(val, dict) and "score" in val:
+                                                score = float(val["score"])
+                                                break
+                                if score is not None:
+                                    current_scores.append(score)
+                                    baseline_scores.append(baseline_scores_dict[doc_id])
+
+                        if current_scores and baseline_scores:
+                            comparison = compute_baseline_comparison(current_scores, baseline_scores, baseline_display_name)
+                            task_results = results["results"][task_name]
+                            task_results["paired_baseline"] = comparison["baseline_name"]
+                            task_results["paired_baseline_score"] = comparison["baseline_mean"] * 100
+                            task_results["paired_ci_lower"] = comparison["ci_lower"] * 100
+                            task_results["paired_ci_upper"] = comparison["ci_upper"] * 100
+                            task_results["paired_pvalue"] = comparison["p_value"]
+                            eval_logger.info(f"[Baseline] {task_name}: diff={comparison['mean_diff']*100:.2f}%, p={comparison['p_value']:.4f}")
+                        else:
+                            eval_logger.debug(f"[Baseline] Skipping {task_name}: no valid scores found with score_key='{score_key}'")
+                except Exception as e:
+                    eval_logger.warning(f"[Baseline] Failed for {task_name}: {e}")
+
         return results
     else:
         return None
@@ -333,6 +422,7 @@ def evaluate(
     lm: "LM",
     task_dict,
     limit: Optional[int] = None,
+    offset: int = 0,
     cache_requests: bool = False,
     rewrite_requests_cache: bool = False,
     bootstrap_iters: Optional[int] = 100000,
@@ -354,6 +444,8 @@ def evaluate(
         Dictionary of tasks. Tasks will be taken to have name type(task).config.task .
     :param limit: int, optional
         Limit the number of examples per task (only use this for testing)
+    :param offset: int, optional
+        Start evaluation from this dataset index for each task.
     :param bootstrap_iters:
         Number of iterations for bootstrap statistics, used when calculating stderr. Set to 0 for skipping all stderr calculations.
     :param write_out: bool
@@ -448,6 +540,7 @@ def evaluate(
         limit = get_sample_size(task, limit)
         task.build_all_requests(
             limit=limit,
+            offset=offset,
             rank=global_rank,
             world_size=world_size,
             cache_requests=cache_requests,  # later we will add them
@@ -491,6 +584,9 @@ def evaluate(
             padding_requests[reqtype] += numpad
 
     ### Run LMM on inputs, get all outputs ###
+    # Load response cache (set LMMS_EVAL_USE_CACHE=True to enable)
+    lm.load_cache()
+
     # execute each type of request
     for reqtype, reqs in requests.items():
         eval_logger.info("Running {} requests".format(reqtype))
@@ -503,8 +599,46 @@ def evaluate(
             for _ in range(padding_requests[reqtype]):
                 cloned_reqs.extend([req] * req.repeats)
 
-        # run requests through model
-        resps = getattr(lm, reqtype)(cloned_reqs)  # Choiszt run generate until
+        # Split cached vs uncached requests
+        cached_resps: dict[int, str] = {}
+        uncached_reqs: list = []
+        uncached_indices: list[int] = []
+        for i, req in enumerate(cloned_reqs):
+            cached = lm.cache_dict.get(req.task_name, {}).get(req.doc_id)
+            if cached is not None:
+                cached_resps[i] = cached
+            else:
+                uncached_reqs.append(req)
+                uncached_indices.append(i)
+
+        if cached_resps:
+            eval_logger.info(
+                f"Cache hit: {len(cached_resps)}, "
+                f"miss: {len(uncached_reqs)}"
+            )
+
+        # Run model only on uncached requests.
+        # Incremental cache writes happen inside each model's
+        # generate_until batch loop via ``lm.cache_response()``.
+        # The post-return write below is a fallback for models that
+        # have not yet adopted per-batch caching.
+        if uncached_reqs:
+            new_resps = getattr(lm, reqtype)(uncached_reqs)
+            for req, resp in zip(uncached_reqs, new_resps):
+                lm.add_request_response_to_cache(req, resp)
+        else:
+            new_resps = []
+            eval_logger.info(
+                "All requests served from cache, skipping "
+                "model inference"
+            )
+
+        # Merge cached and new responses in original order
+        resps = [None] * len(cloned_reqs)
+        for i, resp in cached_resps.items():
+            resps[i] = resp
+        for i, resp in zip(uncached_indices, new_resps):
+            resps[i] = resp
 
         # put responses from model into a list of length K for each request.
         for x, req in zip(resps, cloned_reqs):
@@ -550,15 +684,53 @@ def evaluate(
         # iterate over different filters used
         for filter_key in task.instances[0].filtered_resps.keys():
             if cli_args is not None and not cli_args.process_with_media:
-                doc_iterator = create_iterator(enumerate(task.eval_docs_no_media), rank=RANK, limit=int(limit) if limit else None, world_size=WORLD_SIZE)
+                doc_iterator = create_iterator(
+                    enumerate(task.eval_docs_no_media),
+                    rank=RANK,
+                    limit=int(limit) if limit else None,
+                    world_size=WORLD_SIZE,
+                    offset=offset,
+                )
             else:
-                doc_iterator = task.doc_iterator(rank=RANK, limit=limit, world_size=WORLD_SIZE)
-            doc_iterator_for_counting = itertools.islice(range(len(task.test_docs())), RANK, limit, WORLD_SIZE) if task.has_test_docs() else itertools.islice(range(len(task.validation_docs())), RANK, limit, WORLD_SIZE)
+                doc_iterator = task.doc_iterator(rank=RANK, limit=limit, world_size=WORLD_SIZE, offset=offset)
+            doc_iterator_for_counting = (
+                create_iterator(
+                    range(len(task.test_docs())),
+                    rank=RANK,
+                    limit=limit,
+                    world_size=WORLD_SIZE,
+                    offset=offset,
+                )
+                if task.has_test_docs()
+                else create_iterator(
+                    range(len(task.validation_docs())),
+                    rank=RANK,
+                    limit=limit,
+                    world_size=WORLD_SIZE,
+                    offset=offset,
+                )
+            )
             total_docs = sum(1 for _ in doc_iterator_for_counting)
-            pbar = tqdm(total=total_docs, desc=f"Postprocessing", disable=(RANK != 0))
+            pbar = tqdm(total=total_docs, desc="Postprocessing", disable=(RANK != 0))
             for doc_id, doc in doc_iterator:
                 requests = instances_by_doc_id[doc_id]
                 metrics = task.process_results(doc, [req.filtered_resps[filter_key] for req in requests])
+
+                # For stability metrics: compute per-sample scores when repeats > 1
+                repeats = task.config.repeats if hasattr(task, "config") and hasattr(task.config, "repeats") else 1
+                if repeats > 1 and len(requests) == repeats:
+                    # Compute per-sample scores by calling process_results for each sample individually
+                    per_sample_scores = {}
+                    for req in requests:
+                        sample_metrics = task.process_results(doc, [req.filtered_resps[filter_key]])
+                        for metric_name, value in sample_metrics.items():
+                            if metric_name not in per_sample_scores:
+                                per_sample_scores[metric_name] = []
+                            per_sample_scores[metric_name].append(value)
+                    # Store per-sample scores grouped by doc_id
+                    for metric_name, scores in per_sample_scores.items():
+                        task_output.per_sample_metrics[(metric_name, filter_key)].append(scores)
+
                 if log_samples:
                     target = task.doc_to_target(doc)
                     saved_doc = {}
@@ -631,6 +803,17 @@ def evaluate(
                 if RANK == 0:
                     task_output.sample_metrics[metrics] = list(itertools.chain.from_iterable(metric_list))
 
+            # gather per_sample_metrics for stability metrics
+            for metrics in task_output.per_sample_metrics:
+                metric_list = [None] * WORLD_SIZE if RANK == 0 else None
+                torch.distributed.gather_object(
+                    obj=task_output.per_sample_metrics[metrics],
+                    object_gather_list=metric_list,
+                    dst=0,
+                )
+                if RANK == 0:
+                    task_output.per_sample_metrics[metrics] = list(itertools.chain.from_iterable(metric_list))
+
         dist.barrier()  # Ensure all processes are synced before proceeding
 
     if RANK == 0:
@@ -641,6 +824,7 @@ def evaluate(
         for task_output in eval_tasks:
             task_output.calculate_aggregate_metric(bootstrap_iters=bootstrap_iters)
             task_output.calculate_clt_aggregate_metric()
+            task_output.calculate_stability_metrics()
         (
             results,
             samples,
@@ -706,6 +890,10 @@ def evaluate(
             dist.barrier()
         else:
             raise ValueError(f"Invalid distributed_executor_backend: {distributed_executor_backend}. Choose either 'accelerate' or 'torchrun'.")
+
+    # Clean up eval cache after successful evaluation to prevent
+    # stale cache from being misread by future runs with different gen_kwargs
+    lm.cleanup_cache()
 
     return results_dict
 
