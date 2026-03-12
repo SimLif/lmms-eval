@@ -13,7 +13,7 @@ from loguru import logger as eval_logger
 from PIL import Image
 from torchvision.transforms.functional import InterpolationMode
 from tqdm import tqdm
-from transformers import AutoModel, AutoTokenizer
+from transformers import AutoModel, AutoTokenizer, GenerationConfig
 
 from lmms_eval.api.instance import Instance
 from lmms_eval.api.model import lmms
@@ -245,6 +245,7 @@ class InternVL3(lmms):
         batch_size: str = "1",
         num_frame: int = 32,
         max_num: int = 12,
+        total_max_num: int = 64,
         use_flash_attn: bool = True,
         **kwargs,
     ):
@@ -253,6 +254,7 @@ class InternVL3(lmms):
         self.path = pretrained
         self.num_frame = num_frame
         self.max_num = max_num
+        self.total_max_num = total_max_num
 
         batch_size_int = int(batch_size)
         assert batch_size_int == 1, f"Batch size should be 1 for InternVL3, but got {batch_size_int}."
@@ -284,6 +286,18 @@ class InternVL3(lmms):
         ).eval()
         self._config = self._model.config
         self._tokenizer = AutoTokenizer.from_pretrained(self.path, trust_remote_code=True, use_fast=False)
+
+        # Suppress "Setting pad_token_id to eos_token_id" warnings.
+        # InternVL's generate() delegates to self.language_model.generate(),
+        # so pad_token_id must be set on the inner language model.
+        for sub in [self._model, getattr(self._model, "language_model", None)]:
+            if sub is None:
+                continue
+            gc = getattr(sub, "generation_config", None)
+            if gc is None:
+                sub.generation_config = GenerationConfig(pad_token_id=self._tokenizer.eos_token_id)
+            elif gc.pad_token_id is None:
+                gc.pad_token_id = self._tokenizer.eos_token_id
 
         if accelerator.num_processes > 1:
             assert accelerator.distributed_type in [
@@ -362,6 +376,8 @@ class InternVL3(lmms):
         """Flatten a nested list."""
         new_list = []
         for i in input:
+            if i is None:
+                continue
             for j in i:
                 new_list.append(j)
         return new_list
@@ -398,7 +414,12 @@ class InternVL3(lmms):
 
             if self.modality == "image":
                 if visuals:
-                    processed_visuals = [load_image(visual, max_num=self.max_num).to(torch.bfloat16).to(self._device) for visual in visuals]
+                    # Dynamic max_num calculation like VLMEvalKit:
+                    # max_num = max(1, min(self.max_num, self.total_max_num // image_num))
+                    image_num = len(visuals)
+                    dynamic_max_num = max(1, min(self.max_num, self.total_max_num // image_num))
+
+                    processed_visuals = [load_image(visual, max_num=dynamic_max_num).to(torch.bfloat16).to(self._device) for visual in visuals]
                     pixel_values = torch.cat(processed_visuals, dim=0)
                     num_patches_list = [v.size(0) for v in processed_visuals]
                     # count how many <image> tags are already in the text
@@ -442,7 +463,13 @@ class InternVL3(lmms):
             elif self.modality == "video":
                 assert len(visuals) == 1, f"Only one video is supported, but got {len(visuals)} videos."
                 video_path = visuals[0]
-                pixel_values, num_patches_list = load_video(video_path, num_segments=self.num_frame, max_num=1)
+
+                # Dynamic max_num calculation like VLMEvalKit:
+                # For video, num_segments frames are extracted, so:
+                # max_num = max(1, min(self.max_num, self.total_max_num // num_segments))
+                dynamic_max_num = max(1, min(self.max_num, self.total_max_num // self.num_frame))
+
+                pixel_values, num_patches_list = load_video(video_path, num_segments=self.num_frame, max_num=dynamic_max_num)
                 pixel_values = pixel_values.to(torch.bfloat16).to(self._device)
                 video_prefix = "".join([f"Frame{i + 1}: <image>\n" for i in range(len(num_patches_list))])
                 question = video_prefix + contexts
@@ -458,6 +485,7 @@ class InternVL3(lmms):
                 )
 
             res.append(response)
+            self.cache_response(doc_id, task, response)
             pbar.update(1)
         pbar.close()
         return res

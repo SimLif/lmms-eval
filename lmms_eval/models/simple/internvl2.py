@@ -9,7 +9,7 @@ from decord import VideoReader, cpu
 from PIL import Image
 from torchvision.transforms.functional import InterpolationMode
 from tqdm import tqdm
-from transformers import AutoModel, AutoTokenizer
+from transformers import AutoModel, AutoTokenizer, GenerationConfig
 
 from lmms_eval.api.instance import Instance
 from lmms_eval.api.model import lmms
@@ -29,7 +29,14 @@ DEFAULT_GEN_KWARGS = dict(
 
 def build_transform(input_size):
     MEAN, STD = IMAGENET_MEAN, IMAGENET_STD
-    transform = T.Compose([T.Lambda(lambda img: img.convert("RGB") if img.mode != "RGB" else img), T.Resize((input_size, input_size), interpolation=InterpolationMode.BICUBIC), T.ToTensor(), T.Normalize(mean=MEAN, std=STD)])
+    transform = T.Compose(
+        [
+            T.Lambda(lambda img: img.convert("RGB") if img.mode != "RGB" else img),
+            T.Resize((input_size, input_size), interpolation=InterpolationMode.BICUBIC),
+            T.ToTensor(),
+            T.Normalize(mean=MEAN, std=STD),
+        ]
+    )
     return transform
 
 
@@ -69,7 +76,12 @@ def dynamic_preprocess(image, min_num=1, max_num=6, image_size=448, use_thumbnai
     resized_img = image.resize((target_width, target_height))
     processed_images = []
     for i in range(blocks):
-        box = ((i % (target_width // image_size)) * image_size, (i // (target_width // image_size)) * image_size, ((i % (target_width // image_size)) + 1) * image_size, ((i // (target_width // image_size)) + 1) * image_size)
+        box = (
+            (i % (target_width // image_size)) * image_size,
+            (i // (target_width // image_size)) * image_size,
+            ((i % (target_width // image_size)) + 1) * image_size,
+            ((i // (target_width // image_size)) + 1) * image_size,
+        )
         # split the image
         split_img = resized_img.crop(box)
         processed_images.append(split_img)
@@ -179,6 +191,7 @@ class InternVL2(lmms):
         batch_size: str = "1",
         num_frame: int = 32,
         num_layers=None,
+        use_flash_attn: bool = True,
         **kwargs,
     ):
         super().__init__()
@@ -204,11 +217,34 @@ class InternVL2(lmms):
             self._device = torch.device(f"cuda:{accelerator.local_process_index}")
             self.device_map = f"cuda:{accelerator.local_process_index}"
 
-        self._model = AutoModel.from_pretrained(self.path, torch_dtype=torch.bfloat16, low_cpu_mem_usage=True, trust_remote_code=True, device_map=self.device_map).eval()
+        self._model = AutoModel.from_pretrained(
+            self.path,
+            torch_dtype=torch.bfloat16,
+            low_cpu_mem_usage=True,
+            use_flash_attn=use_flash_attn,
+            trust_remote_code=True,
+            device_map=self.device_map,
+        ).eval()
         self._tokenizer = AutoTokenizer.from_pretrained(self.path, trust_remote_code=True, device_map=self.device_map)
 
+        # Suppress "Setting pad_token_id to eos_token_id" warnings.
+        # InternVL's generate() delegates to self.language_model.generate(),
+        # so pad_token_id must be set on the inner language model.
+        for sub in [self._model, getattr(self._model, "language_model", None)]:
+            if sub is None:
+                continue
+            gc = getattr(sub, "generation_config", None)
+            if gc is None:
+                sub.generation_config = GenerationConfig(pad_token_id=self._tokenizer.eos_token_id)
+            elif gc.pad_token_id is None:
+                gc.pad_token_id = self._tokenizer.eos_token_id
+
         if accelerator.num_processes > 1:
-            assert accelerator.distributed_type in [DistributedType.FSDP, DistributedType.MULTI_GPU, DistributedType.DEEPSPEED], "Unsupported distributed type provided. Only DDP and FSDP are supported."
+            assert accelerator.distributed_type in [
+                DistributedType.FSDP,
+                DistributedType.MULTI_GPU,
+                DistributedType.DEEPSPEED,
+            ], "Unsupported distributed type provided. Only DDP and FSDP are supported."
             # If you want to use DistributedType.DEEPSPEED, you have to run accelerate config before using the model
             # Also, you have to select zero stage 0 (equivalent to DDP) in order to make the prepare model works
             # I tried to set different parameters in the kwargs to let default zero 2 stage works, but it didn't work.
@@ -277,6 +313,8 @@ class InternVL2(lmms):
     def flatten(self, input):
         new_list = []
         for i in input:
+            if i is None:
+                continue
             for j in i:
                 new_list.append(j)
         return new_list
@@ -304,7 +342,7 @@ class InternVL2(lmms):
             visuals = self.flatten(visuals)
             if self.modality == "image":
                 if visuals:
-                    visuals = [load_image(visual).to(torch.bfloat16).cuda() for visual in visuals]
+                    visuals = [load_image(visual).to(torch.bfloat16).to(self._device) for visual in visuals]
                     pixel_values = torch.cat(visuals, dim=0)
                     num_patches_list = [visual.size(0) for visual in visuals]
                     image_tokens = ["<image>"] * len(visuals)
@@ -313,16 +351,33 @@ class InternVL2(lmms):
                 else:
                     pixel_values = None
                     num_patches_list = None
-                response, history = self.model.chat(self.tokenizer, pixel_values, contexts, gen_kwargs, num_patches_list=num_patches_list, history=None, return_history=True)
+                response, history = self.model.chat(
+                    self.tokenizer,
+                    pixel_values,
+                    contexts,
+                    gen_kwargs,
+                    num_patches_list=num_patches_list,
+                    history=None,
+                    return_history=True,
+                )
             elif self.modality == "video":
                 assert len(visuals) == 1, f"Only one video is supported, but got {len(visuals)} videos."
                 video_path = visuals[0]
                 pixel_values, num_patches_list = load_video(video_path, num_segments=self.num_frame)
-                pixel_values = pixel_values.to(torch.bfloat16).cuda()
-                video_prefix = "".join([f"Frame{i+1}: <image>\n" for i in range(len(num_patches_list))])
+                pixel_values = pixel_values.to(torch.bfloat16).to(self._device)
+                video_prefix = "".join([f"Frame{i + 1}: <image>\n" for i in range(len(num_patches_list))])
                 question = video_prefix + contexts
-                response, history = self.model.chat(self.tokenizer, pixel_values, question, gen_kwargs, num_patches_list=num_patches_list, history=None, return_history=True)
+                response, history = self.model.chat(
+                    self.tokenizer,
+                    pixel_values,
+                    question,
+                    gen_kwargs,
+                    num_patches_list=num_patches_list,
+                    history=None,
+                    return_history=True,
+                )
             res.append(response)
+            self.cache_response(doc_id, task, response)
             pbar.update(1)
         pbar.close()
         return res

@@ -1,86 +1,112 @@
+import base64
+from io import BytesIO
 from typing import List, Optional, Tuple, Union
 
-import numpy as np
 import torch
 from accelerate import Accelerator, DistributedType
 from loguru import logger as eval_logger
 from PIL import Image
 from tqdm import tqdm
+from transformers import AutoProcessor, AutoTokenizer
 
 from lmms_eval import utils
 from lmms_eval.api.instance import Instance
 from lmms_eval.api.model import lmms
 from lmms_eval.api.registry import register_model
-from lmms_eval.imports import optional_import
 
-PeftModel, _has_peft = optional_import("peft", "PeftModel")
-Qwen2_5_VLForConditionalGeneration, _ = optional_import("transformers", "Qwen2_5_VLForConditionalGeneration")
-Qwen2_5_VLProcessor, _ = optional_import("transformers", "Qwen2_5_VLProcessor")
-if not _has_peft:
-    eval_logger.warning("Failed to import transformers or peft; Please install via `pip install transformers peft`")
+# Import both MoE and non-MoE model classes
+try:
+    from transformers import Glm4vMoeForConditionalGeneration
+except ImportError:
+    Glm4vMoeForConditionalGeneration = None
 
-process_vision_info, _has_qwen_vl = optional_import("qwen_vl_utils", "process_vision_info")
-if not _has_qwen_vl:
-    eval_logger.warning("Failed to import qwen_vl_utils; Please install via `pip install qwen-vl-utils`")
+try:
+    from transformers import Glm4vForConditionalGeneration
+except ImportError:
+    Glm4vForConditionalGeneration = None
+
+if Glm4vMoeForConditionalGeneration is None and Glm4vForConditionalGeneration is None:
+    eval_logger.warning("Failed to import GLM4V model classes. " "Please install transformers>=5.0.0: pip install transformers>=5.0.0")
 
 
-@register_model("video_salmonn_2")
-class VideoSALMONN2(lmms):
+@register_model("glm4v")
+class GLM4V(lmms):
     """
-    video-SALMONN-2_plus_7B
-    https://huggingface.co/tsinghua-ee/video-SALMONN-2_plus_7B
+    GLM-4.6V Model
+    https://huggingface.co/zai-org/GLM-4.6V
+
+    Supports:
+    - GLM-4.6V (106B MoE model) - requires multiple GPUs
+    - GLM-4.6V-Flash (9B model) - fits on single GPU
+
+    Usage examples:
+    - Flash model: pretrained=zai-org/GLM-4.6V-Flash
+    - Full model (multi-GPU): pretrained=zai-org/GLM-4.6V
     """
 
     def __init__(
         self,
-        pretrained: str = "tsinghua-ee/video-SALMONN-2_plus_7B",
-        base_model: str = "Qwen/Qwen2.5-VL-7B-Instruct",
+        pretrained: str = "zai-org/GLM-4.6V-Flash",
         device: Optional[str] = "cuda",
         device_map: Optional[str] = "auto",
         batch_size: Optional[Union[int, str]] = 1,
-        use_cache=True,
+        use_cache: bool = True,
         attn_implementation: Optional[str] = None,
-        max_num_frames: int = 768,
-        max_pixels: int = 1605632,
-        min_pixels: int = 61250,
-        fps: Optional[float] = 2.0,
-        system_prompt: Optional[str] = "You are a helpful assistant.",
+        max_new_tokens: int = 8192,
+        system_prompt: Optional[str] = None,
         **kwargs,
     ) -> None:
         super().__init__()
         assert kwargs == {}, f"Unexpected kwargs: {kwargs}"
 
+        # Determine model class based on pretrained path
+        is_moe_model = "Flash" not in pretrained
+
+        if is_moe_model:
+            if Glm4vMoeForConditionalGeneration is None:
+                raise ImportError("Glm4vMoeForConditionalGeneration not available. " "Please install transformers>=5.0.0: pip install transformers>=5.0.0")
+            model_class = Glm4vMoeForConditionalGeneration
+            eval_logger.info(f"Loading GLM-4.6V MoE model from {pretrained}")
+        else:
+            if Glm4vForConditionalGeneration is None:
+                raise ImportError("Glm4vForConditionalGeneration not available. " "Please install transformers>=5.0.0: pip install transformers>=5.0.0")
+            model_class = Glm4vForConditionalGeneration
+            eval_logger.info(f"Loading GLM-4.6V Flash model from {pretrained}")
+
+        # Validate attention implementation
+        valid_attn_implementations = [None, "flash_attention_2", "sdpa", "eager"]
+        if attn_implementation not in valid_attn_implementations:
+            raise ValueError(f"attn_implementation must be one of {valid_attn_implementations}, got {attn_implementation}")
+
         accelerator = Accelerator()
+        self.accelerator = accelerator
         if accelerator.num_processes > 1:
             self._device = torch.device(f"cuda:{accelerator.local_process_index}")
             self.device_map = f"cuda:{accelerator.local_process_index}"
-        elif accelerator.num_processes == 1 and device_map == "auto":
-            self._device = torch.device(device)
-            self.device_map = device_map
         else:
-            self._device = torch.device(f"cuda:{accelerator.local_process_index}")
-            self.device_map = f"cuda:{accelerator.local_process_index}"
+            self._device = torch.device(device)
+            self.device_map = device_map if device_map else device
 
+        # Prepare model loading arguments
         model_kwargs = {
-            "torch_dtype": torch.float16,
             "device_map": self.device_map,
+            "torch_dtype": torch.bfloat16,
         }
-        if attn_implementation:
+
+        # Add attention implementation if specified
+        if attn_implementation is not None:
             model_kwargs["attn_implementation"] = attn_implementation
 
-        base_model_instance = Qwen2_5_VLForConditionalGeneration.from_pretrained(base_model, **model_kwargs)
-        self._model = PeftModel.from_pretrained(base_model_instance, pretrained, device_map=self.device_map).eval()
-        self.processor = Qwen2_5_VLProcessor.from_pretrained(base_model, max_pixels=max_pixels, min_pixels=min_pixels)
+        self._model = model_class.from_pretrained(pretrained, **model_kwargs).eval()
+        self.processor = AutoProcessor.from_pretrained(pretrained)
+        self._tokenizer = AutoTokenizer.from_pretrained(pretrained)
+        self.system_prompt = system_prompt
+        self.max_new_tokens = max_new_tokens
 
-        self.max_num_frames = max_num_frames
-        self.max_pixels = max_pixels
-        self.min_pixels = min_pixels
-        self.fps = fps
-        self._tokenizer = self.processor.tokenizer
-        self._config = self._model.config
+        self._config = self.model.config
+        self._max_length = 128000  # GLM-4.6V supports 128K context
         self.batch_size_per_gpu = int(batch_size)
         self.use_cache = use_cache
-        self.system_prompt = system_prompt
 
         if accelerator.num_processes > 1:
             assert accelerator.distributed_type in [
@@ -140,7 +166,7 @@ class VideoSALMONN2(lmms):
         return self._world_size
 
     def loglikelihood(self, requests: List[Instance]) -> List[Tuple[float, bool]]:
-        raise NotImplementedError("Loglikelihood is not implemented for VideoSALMONN")
+        raise NotImplementedError("Loglikelihood is not implemented for GLM4V")
 
     def flatten(self, input):
         new_list = []
@@ -148,6 +174,15 @@ class VideoSALMONN2(lmms):
             for j in i:
                 new_list.append(j)
         return new_list
+
+    def _image_to_base64(self, image: Image.Image) -> str:
+        """Convert PIL Image to base64 data URL."""
+        base64_image = image.convert("RGB")
+        buffer = BytesIO()
+        base64_image.save(buffer, format="JPEG")
+        base64_bytes = base64.b64encode(buffer.getvalue())
+        base64_string = base64_bytes.decode("utf-8")
+        return f"data:image/jpeg;base64,{base64_string}"
 
     def generate_until(self, requests: List[Instance]) -> List[str]:
         res = []
@@ -173,8 +208,6 @@ class VideoSALMONN2(lmms):
             elif not isinstance(until, list):
                 raise ValueError(f"Expected `gen_kwargs['until']` to be of type Union[str, list], but got {type(until)}")
 
-            until = [item for item in until if item != "\n\n"]
-
             if isinstance(contexts, tuple):
                 contexts = list(contexts)
 
@@ -184,70 +217,57 @@ class VideoSALMONN2(lmms):
 
             batched_messages = []
             for i, context in enumerate(contexts):
-                message = [{"role": "system", "content": self.system_prompt}]
-                processed_visuals = []
+                if "<image>" in context:
+                    context = context.replace("<image>", "")
 
+                message = []
+                if self.system_prompt:
+                    message.append({"role": "system", "content": self.system_prompt})
+
+                content = []
                 if visual_list[i] is not None:
                     for visual in visual_list[i]:
-                        if isinstance(visual, str) and visual.endswith((".mp4", ".avi", ".mov", ".mkv", ".webm")):
-                            processed_visuals.append(
-                                {
-                                    "type": "video",
-                                    "video": visual,
-                                    "max_pixels": self.max_pixels,
-                                    "min_pixels": self.min_pixels,
-                                    "fps": self.fps,
-                                }
-                            )
-                        elif isinstance(visual, Image.Image):
-                            processed_visuals.append(
+                        if isinstance(visual, Image.Image):
+                            content.append(
                                 {
                                     "type": "image",
-                                    "image": visual,
-                                    "max_pixels": self.max_pixels,
-                                    "min_pixels": self.min_pixels,
+                                    "url": self._image_to_base64(visual),
                                 }
                             )
-                        elif isinstance(visual, dict) and "array" in visual:
-                            # video-SALMONN-2 does not support standalone audio - skip
-                            pass
+                        elif isinstance(visual, str):
+                            # URL or file path
+                            content.append(
+                                {
+                                    "type": "image",
+                                    "url": visual,
+                                }
+                            )
 
-                message.append(
-                    {
-                        "role": "user",
-                        "content": processed_visuals + [{"type": "text", "text": context}],
-                    }
-                )
-
+                content.append({"type": "text", "text": context})
+                message.append({"role": "user", "content": content})
                 batched_messages.append(message)
 
-            texts = self.processor.apply_chat_template(batched_messages, tokenize=False, add_generation_prompt=True)
-            image_inputs, video_inputs = process_vision_info(batched_messages)
-
-            if video_inputs is not None:
-                total_frames = video_inputs[0].shape[0]
-                num_frames = min(self.max_num_frames, total_frames)
-                indices = np.linspace(0, total_frames - 1, num_frames, dtype=int, endpoint=True)
-                indices = np.unique(indices)
-                video_inputs[0] = video_inputs[0][indices]
-
-            padding_side = "left" if self.batch_size > 1 else "right"
-            inputs = self.processor(
-                text=texts,
-                images=image_inputs,
-                videos=video_inputs,
-                padding=True,
-                padding_side=padding_side,
+            # Process inputs using chat template
+            inputs = self.processor.apply_chat_template(
+                batched_messages,
+                tokenize=True,
+                add_generation_prompt=True,
+                return_dict=True,
                 return_tensors="pt",
+                padding=True,
             )
+
+            # Remove token_type_ids if present (GLM-4.6V specific)
+            inputs.pop("token_type_ids", None)
 
             if self.device_map == "auto":
                 inputs = inputs.to("cuda")
             else:
                 inputs = inputs.to(self.device)
 
+            # Set default generation kwargs
             default_gen_kwargs = {
-                "max_new_tokens": 512,
+                "max_new_tokens": self.max_new_tokens,
                 "temperature": 0.0,
                 "top_p": None,
                 "num_beams": 1,
@@ -262,27 +282,20 @@ class VideoSALMONN2(lmms):
                 current_gen_kwargs["temperature"] = None
                 current_gen_kwargs["top_p"] = None
 
-            try:
-                cont = self.model.generate(
-                    **inputs,
-                    eos_token_id=self.tokenizer.eos_token_id,
-                    pad_token_id=pad_token_id,
-                    do_sample=current_gen_kwargs["do_sample"],
-                    temperature=current_gen_kwargs["temperature"],
-                    top_p=current_gen_kwargs["top_p"],
-                    num_beams=current_gen_kwargs["num_beams"],
-                    max_new_tokens=current_gen_kwargs["max_new_tokens"],
-                    use_cache=self.use_cache,
-                )
-            except Exception as e:
-                eval_logger.error(f"Error {e} in generating")
-                answer = ""
-                res.append(answer)
-                pbar.update(1)
-                self.cache_hook.add_partial("generate_until", (context, gen_kwargs), answer)
-                continue
+            cont = self.model.generate(
+                **inputs,
+                eos_token_id=self.tokenizer.eos_token_id,
+                pad_token_id=pad_token_id,
+                do_sample=current_gen_kwargs["do_sample"],
+                temperature=current_gen_kwargs["temperature"],
+                top_p=current_gen_kwargs["top_p"],
+                num_beams=current_gen_kwargs["num_beams"],
+                max_new_tokens=current_gen_kwargs["max_new_tokens"],
+                use_cache=self.use_cache,
+            )
 
-            generated_ids_trimmed = [out_ids[len(in_ids) :] for in_ids, out_ids in zip(inputs.input_ids, cont)]
+            # Decode only the generated tokens
+            generated_ids_trimmed = [out_ids[len(in_ids) :] for in_ids, out_ids in zip(inputs["input_ids"], cont)]
             answers = self.processor.batch_decode(
                 generated_ids_trimmed,
                 skip_special_tokens=True,
@@ -304,5 +317,5 @@ class VideoSALMONN2(lmms):
         pbar.close()
         return res
 
-    def generate_until_multi_round(self, requests) -> List[str]:
-        raise NotImplementedError("TODO: Implement multi-round generation")
+    def generate_until_multi_round(self, requests: List[Instance]) -> List[str]:
+        raise NotImplementedError("Multi-round generation is not implemented for GLM4V")
