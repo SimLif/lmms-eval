@@ -1,7 +1,6 @@
-tag: medmoe_vqa
-dataset_path: /project/c4gcot/datasets/medmoe-slake
+dataset_path: simwit/slake
 dataset_kwargs:
-  token: True
+  token: true
 task: "slake_closed"
 test_split: test_closed
 output_type: generate_until
@@ -25,24 +24,11 @@ metric_list:
 lmms_eval_specific_kwargs:
   default:
     pre_prompt: ""
-    post_prompt: ""
-  gpt4v:
+    post_prompt_en: "\nAnswer the question using a single word or phrase."
+    post_prompt_zh: "\n请用一个单词或者短语回答该问题。"
+  think:
     pre_prompt: ""
-    post_prompt: "\nAnswer the question with Yes or No."
-  qwen_vl:  
-    pre_prompt: ""
-    post_prompt: " Answer:"
-  otterhd:
-    pre_prompt: ""
-    post_prompt: " Answer:"
-  xcomposer2_4khd:
-    pre_prompt: "[UNUSED_TOKEN_146]user\n"
-    post_prompt: " Answer this question briefly[UNUSED_TOKEN_145]\n[UNUSED_TOKEN_146]assistant\n"
-  moe_llava_qwen:
-    pre_prompt: ""
-    post_prompt: "\nAnswer the question with Yes or No."
-  # qwen2_vl:
-  #   pre_prompt: ""
-  #   post_prompt: "\nAnswer the question with Yes or No:"
+    post_prompt_en: "\nAnswer the question using a single word or phrase and put the answer in one \"\\boxed{}\"."
+    post_prompt_zh: "\n请用一个单词或者短语回答该问题，并将答案放在一个\"\\boxed{}\"中。"
 metadata:
   - version: 0.0

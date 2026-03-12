@@ -260,7 +260,7 @@ def mmmu_aggregate_results(results):
         "acc": round(all_ins_acc, 5),
     }
     print(printable_results)
-    return printable_results["Overall"]["acc"]
+    return printable_results["Overall"]["acc"] * 100
 
 
 ##################

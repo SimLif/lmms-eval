@@ -2,5 +2,9 @@ group: slake
 task:
   - slake_open
   - slake_closed
+aggregate_metric_list:
+  - metric: accuracy
+    aggregation: mean
+    weight_by_size: true
 metadata:
-  - version: 1.0
+  version: 1.0

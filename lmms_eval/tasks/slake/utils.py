@@ -1,23 +1,10 @@
-import datetime
-import json
-import os
-import sys
-from collections import defaultdict
-
-from loguru import logger as eval_logger
-
-dir_name = os.path.dirname(os.path.abspath(__file__))
-
-
-from lmms_eval.tasks._task_utils.file_utils import generate_submission_file
-from lmms_eval.tasks.slake.metrics import (
+from lmms_eval.tasks._task_utils.answer_utils import parse_reasoning_answer
+from lmms_eval.tasks._task_utils.judge_utils import is_judge_enabled, judge_binary
+from lmms_eval.tasks._task_utils.vqa_metrics import (
     calculate_bleu,
-    calculate_exactmatch,
     calculate_f1score,
     calculate_f1score_old,
 )
-
-replace_prompt = " Please answer yes or no."
 
 
 def slake_doc_to_visual(doc):
@@ -25,25 +12,39 @@ def slake_doc_to_visual(doc):
 
 
 def slake_doc_to_text(doc, lmms_eval_specific_kwargs=None):
+    """Build prompt with bilingual support (en/zh).
+
+    Uses q_lang field to select appropriate prompt:
+    - For English: uses post_prompt_en (or post_prompt as fallback)
+    - For Chinese: uses post_prompt_zh (or post_prompt as fallback)
+    """
     question = doc["question"].strip()
-    if "pre_prompt" in lmms_eval_specific_kwargs and lmms_eval_specific_kwargs["pre_prompt"] != "":
-        question = question.replace(replace_prompt, "")
-        question = f"{lmms_eval_specific_kwargs['pre_prompt']}{question}"
-    if "post_prompt" in lmms_eval_specific_kwargs and lmms_eval_specific_kwargs["post_prompt"] != "":
-        question = question.replace(replace_prompt, "")
-        question = f"{question}{lmms_eval_specific_kwargs['post_prompt']}"
-    return question
+    lang = doc.get("q_lang", "en")
+
+    if lmms_eval_specific_kwargs is None:
+        return question
+
+    # Get pre_prompt (language-specific or fallback)
+    pre_prompt = ""
+    if f"pre_prompt_{lang}" in lmms_eval_specific_kwargs:
+        pre_prompt = lmms_eval_specific_kwargs[f"pre_prompt_{lang}"]
+    elif "pre_prompt" in lmms_eval_specific_kwargs:
+        pre_prompt = lmms_eval_specific_kwargs["pre_prompt"]
+
+    # Get post_prompt (language-specific or fallback)
+    post_prompt = ""
+    if f"post_prompt_{lang}" in lmms_eval_specific_kwargs:
+        post_prompt = lmms_eval_specific_kwargs[f"post_prompt_{lang}"]
+    elif "post_prompt" in lmms_eval_specific_kwargs:
+        post_prompt = lmms_eval_specific_kwargs["post_prompt"]
+
+    return f"{pre_prompt}{question}{post_prompt}"
 
 
 def slake_open_process_results(doc, results):
-    """
-    Args:
-        doc: a instance of the eval dataset
-        results: [pred]
-    Returns:
-        a dictionary with key: metric name (in this case mme score), value: metric value
-    """
-    pred = results[0]
+    """Extract answer from \\boxed{} or <answer> tags, falling back to raw output."""
+    pred = parse_reasoning_answer(results[0], strict=False)
+
     pred_ans = pred.lower().strip().replace(".", "")
     gt_ans = doc["answer"].lower().strip().replace(".", "")
 
@@ -51,8 +52,7 @@ def slake_open_process_results(doc, results):
     _, _, recall_old = calculate_f1score_old(pred_ans, gt_ans)
     bleu_score = calculate_bleu(pred_ans, gt_ans)
 
-    return {
-        # "exact_match": exact_match,
+    metrics = {
         "f1": f1_score * 100,
         "precision": precision * 100,
         "recall": recall * 100,
@@ -60,9 +60,23 @@ def slake_open_process_results(doc, results):
         "bleu": bleu_score * 100,
     }
 
+    if is_judge_enabled():
+        judge_score = judge_binary(
+            question=doc["question"],
+            answer=doc["answer"],
+            prediction=pred_ans,
+        )
+        metrics["llm_judge"] = judge_score
+        # Mirror as accuracy so open+closed can be aggregated at group level
+        metrics["accuracy"] = judge_score
+
+    return metrics
+
 
 def slake_closed_process_results(doc, results):
-    pred = results[0]
+    """Extract answer from \\boxed{} or <answer> tags, falling back to raw output."""
+    pred = parse_reasoning_answer(results[0], strict=False)
+
     pred_ans = pred.lower().strip().replace(".", "")
     gt_ans = doc["answer"].lower().strip().replace(".", "")
 

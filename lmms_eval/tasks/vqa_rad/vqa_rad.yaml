@@ -2,5 +2,9 @@ group: vqa_rad
 task:
   - vqa_rad_open
   - vqa_rad_closed
+aggregate_metric_list:
+  - metric: accuracy
+    aggregation: mean
+    weight_by_size: true
 metadata:
-  - version: 1.0
+  version: 1.0

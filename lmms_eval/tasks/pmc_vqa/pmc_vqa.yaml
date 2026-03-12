@@ -1,7 +1,6 @@
-tag: medmoe_vqa
-dataset_path: /project/c4gcot/datasets/biomed-pmc-vqa
+dataset_path: simwit/biomed-pmc-vqa
 dataset_kwargs:
-  token: True
+  token: true
 task: "pmc_vqa"
 test_split: test
 output_type: generate_until
@@ -9,7 +8,7 @@ doc_to_visual: !function utils.pmc_vqa_doc_to_visual
 doc_to_text: !function utils.pmc_vqa_doc_to_text
 doc_to_target: "label"
 generation_kwargs:
-  max_new_tokens: 256
+  max_new_tokens: 1024
   temperature: 0
   top_p: 1.0
   num_beams: 1
@@ -24,6 +23,9 @@ metric_list:
 lmms_eval_specific_kwargs:
   default:
     pre_prompt: ""
-    post_prompt: "\n Analyze the image and select the correct option. Format your response as: 'Answer: (X) - [brief one-sentence justification]'"
+    post_prompt: "\nAnswer with the option's letter from the given choices directly."
+  think:
+    pre_prompt: ""
+    post_prompt: "\nAnswer with the option's letter from the given choices and put the letter in one \"\\boxed{}\"."
 metadata:
   - version: 0.0

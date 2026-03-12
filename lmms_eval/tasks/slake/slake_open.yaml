@@ -1,7 +1,6 @@
-tag: medmoe_vqa
-dataset_path: /project/c4gcot/datasets/medmoe-slake
+dataset_path: simwit/slake
 dataset_kwargs:
-  token: True
+  token: true
 task: "slake_open"
 test_split: test_open
 output_type: generate_until
@@ -21,7 +20,7 @@ process_results: !function utils.slake_open_process_results
 metric_list:
   - metric: f1
     aggregation: mean
-    higher_is_better: true 
+    higher_is_better: true
   - metric: precision
     aggregation: mean
     higher_is_better: true
@@ -37,18 +36,11 @@ metric_list:
 lmms_eval_specific_kwargs:
   default:
     pre_prompt: ""
-    post_prompt: ""
-  gpt4v:
+    post_prompt_en: "\nPlease answer the question concisely."
+    post_prompt_zh: "\n请简要回答该问题。"
+  think:
     pre_prompt: ""
-    post_prompt: "\nAnswer the question with Yes or No."
-  qwen_vl:  
-    pre_prompt: ""
-    post_prompt: " Answer:"
-  otterhd:
-    pre_prompt: ""
-    post_prompt: " Answer:"
-  xcomposer2_4khd:
-    pre_prompt: "[UNUSED_TOKEN_146]user\n"
-    post_prompt: " Answer this question briefly[UNUSED_TOKEN_145]\n[UNUSED_TOKEN_146]assistant\n"
+    post_prompt_en: "\nPlease answer the question concisely and put the answer in one \"\\boxed{}\"."
+    post_prompt_zh: "\n请简要回答该问题，并将答案放在一个\"\\boxed{}\"中。"
 metadata:
   - version: 0.0

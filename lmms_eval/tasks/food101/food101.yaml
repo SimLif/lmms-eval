@@ -3,4 +3,4 @@ task:
   - food101_in
   - food101_ood
 metadata:
-  - version: 1.0
+  version: 1.0

@@ -1,7 +1,6 @@
-tag: medmoe_vqa
-dataset_path: /project/c4gcot/datasets/medmoe-vqa-rad
+dataset_path: simwit/medmoe-vqa-rad
 dataset_kwargs:
-  token: True
+  token: true
 task: "vqa_rad_closed"
 test_split: test_closed
 output_type: generate_until
@@ -25,25 +24,9 @@ metric_list:
 lmms_eval_specific_kwargs:
   default:
     pre_prompt: ""
-    post_prompt: ""
-    # post_prompt: "\nPlease output 'yes' or 'no'(no extra output)."
-  gpt4v:
+    post_prompt: "\nAnswer the question using a single word or phrase."
+  think:
     pre_prompt: ""
-    post_prompt: "\nAnswer the question with Yes or No."
-  qwen_vl:  
-    pre_prompt: ""
-    post_prompt: " Answer:"
-  otterhd:
-    pre_prompt: ""
-    post_prompt: " Answer:"
-  xcomposer2_4khd:
-    pre_prompt: "[UNUSED_TOKEN_146]user\n"
-    post_prompt: " Answer this question briefly[UNUSED_TOKEN_145]\n[UNUSED_TOKEN_146]assistant\n"
-  moe_llava_qwen:
-    pre_prompt: ""
-    post_prompt: "\nAnswer the question with Yes or No."
-  # qwen2_vl:
-  #   pre_prompt: ""
-  #   post_prompt: "\nAnswer the question with Yes or No:"
+    post_prompt: "\nAnswer the question using a single word or phrase and put the answer in one \"\\boxed{}\"."
 metadata:
   - version: 0.0
