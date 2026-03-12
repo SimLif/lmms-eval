@@ -4,6 +4,7 @@ from typing import Optional
 from .base import ServerInterface
 from .protocol import ServerConfig
 from .providers import (
+    AnthropicProvider,
     AsyncAzureOpenAIProvider,
     AsyncOpenAIProvider,
     AzureOpenAIProvider,
@@ -15,7 +16,14 @@ from .providers import (
 class ProviderFactory:
     """Factory for creating judge instances based on configuration"""
 
-    _provider_classes = {"openai": OpenAIProvider, "azure": AzureOpenAIProvider, "async_openai": AsyncOpenAIProvider, "async_azure": AsyncAzureOpenAIProvider, "dummy": DummyProvider}
+    _provider_classes = {
+        "openai": OpenAIProvider,
+        "azure": AzureOpenAIProvider,
+        "async_openai": AsyncOpenAIProvider,
+        "async_azure": AsyncAzureOpenAIProvider,
+        "anthropic": AnthropicProvider,
+        "dummy": DummyProvider,
+    }
 
     # TODO
     # This should actually be a decorator that registers the class
@@ -25,7 +33,9 @@ class ProviderFactory:
         pass
 
     @classmethod
-    def create_provider(cls, api_type: Optional[str] = None, config: Optional[ServerConfig] = None) -> ServerInterface:
+    def create_provider(
+        cls, api_type: Optional[str] = None, config: Optional[ServerConfig] = None
+    ) -> ServerInterface:
         """
         Create a judge instance based on API type
 
@@ -41,7 +51,9 @@ class ProviderFactory:
             api_type = os.getenv("API_TYPE", "openai").lower()
 
         if api_type not in cls._provider_classes:
-            raise ValueError(f"Unknown API type: {api_type}. Supported types: {list(cls._provider_classes.keys())}")
+            raise ValueError(
+                f"Unknown API type: {api_type}. Supported types: {list(cls._provider_classes.keys())}"
+            )
 
         judge_class = cls._provider_classes[api_type]
         return judge_class(config=config)

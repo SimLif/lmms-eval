@@ -53,11 +53,13 @@ class ResponseParser:
         response = response.strip().lower()
 
         if output_format == "0/1" or output_format == "1/0":
-            # Check for various formats of 1
-            if any(pattern in response for pattern in ["1", "[1]", "score: 1", "answer: 1"]):
+            # Match "1" as standalone token, bracketed, or in key-value patterns
+            if any(pattern in response for pattern in ["[1]", "score: 1", "answer: 1"]):
                 return 1
-            else:
-                return 0
+            # Check for standalone "1" (not part of larger numbers like "10", "21")
+            if re.search(r"(?<!\d)1(?!\d)", response):
+                return 1
+            return 0
         else:
             # yes/no format
             return response == "yes" or response.startswith("yes")
@@ -74,7 +76,7 @@ class ResponseParser:
                 if score_range:
                     score = max(score_range[0], min(score, score_range[1]))
                 return score
-        except Exception as e:
+        except Exception:
             pass
 
         # Return minimum score as default
@@ -94,7 +96,7 @@ class ResponseParser:
 
                 if len(scores) >= 2:
                     return float(scores[0]), float(scores[1])
-        except Exception as e:
+        except Exception:
             pass
 
         return -1.0, -1.0
@@ -109,7 +111,7 @@ class ResponseParser:
                 import json
 
                 return json.loads(json_match.group())
-        except Exception as e:
+        except Exception:
             pass
 
         return {}
