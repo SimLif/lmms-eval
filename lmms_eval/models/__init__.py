@@ -99,11 +99,11 @@ AVAILABLE_SIMPLE_MODELS = {
     "whisper_tt": "WhisperTT",
     "xcomposer2_4KHD": "XComposer2_4KHD",
     "xcomposer2d5": "XComposer2D5",
-    "med_moe_phi": "Med_MoE_Phi",
-    "med_moe_stablelm": "Med_MoE_StableLM",
-    "moe_llava_qwen": "MoE_Llava_Qwen",
-    "moe_llava_qwen_med": "MoE_Llava_Qwen_Med",
-    "adamllm_qwen_med": "AdaMLLM_Qwen_Med",
+    "med_moe_phi": "lmms_eval.models.med_moe_phi.Med_MoE_Phi",
+    "med_moe_stablelm": "lmms_eval.models.med_moe_stablelm.Med_MoE_StableLM",
+    "moe_llava_qwen": "lmms_eval.models.moe_llava_qwen.MoE_Llava_Qwen",
+    "moe_llava_qwen_med": "lmms_eval.models.moe_llava_qwen_med.MoE_Llava_Qwen_Med",
+    "adamllm_qwen_med": "lmms_eval.models.adamllm_qwen_med.AdaMLLM_Qwen_Med",
     "moe_qwen2_vl": "MoE_Qwen2_VL",
 }
 

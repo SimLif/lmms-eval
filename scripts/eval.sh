@@ -55,7 +55,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 # 定义模型存放路径和检查点存放路径
-MODEL_DIR="/mnt/data/haoqiang/workspace/models"
+MODEL_DIR="/root/paddlejob/workspace/env_run/hqguo/models"
 CKPT_DIR="/mnt/data/haoqiang/workspace/05-moe-llava/checkpoints"
 CKPT_DIR_R1="/mnt/data/haoqiang/workspace/09-med-moe-r1/checkpoints"
 
