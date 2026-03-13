@@ -57,15 +57,20 @@ class Gemma3(lmms):
         if accelerator.num_processes > 1:
             self._device = torch.device(f"cuda:{accelerator.local_process_index}")
             self.device_map = f"cuda:{accelerator.local_process_index}"
+        elif device != "cuda" and device_map == "auto":
+            # Specific device requested (e.g. cuda:2): load to CPU, then .to(device)
+            self._device = torch.device(device)
+            self.device_map = None
         else:
             self._device = torch.device(device)
-            self.device_map = device_map if device_map else device
+            self.device_map = device_map if device_map else None
 
         # Prepare model loading arguments
         model_kwargs = {
             "torch_dtype": torch.bfloat16,
-            "device_map": self.device_map,
         }
+        if self.device_map:
+            model_kwargs["device_map"] = self.device_map
 
         # Add attention implementation if specified
         if attn_implementation is not None:
@@ -73,7 +78,7 @@ class Gemma3(lmms):
 
         # Minimal, generation-capable loader: use the dedicated Gemma3 class
         self._model = Gemma3ForConditionalGeneration.from_pretrained(pretrained, **model_kwargs).eval()
-        self._tokenizer = AutoTokenizer.from_pretrained(pretrained, trust_remote_code=trust_remote_code, device_map=self.device_map)
+        self._tokenizer = AutoTokenizer.from_pretrained(pretrained, trust_remote_code=trust_remote_code)
         self.processor = AutoProcessor.from_pretrained(pretrained, max_pixels=max_pixels, min_pixels=min_pixels)
 
         self._config = self._model.config
@@ -266,13 +271,8 @@ class Gemma3(lmms):
                 batched_messages.append(message)
 
             inputs = self.processor.apply_chat_template(batched_messages, add_generation_prompt=True, tokenize=True, return_dict=True, return_tensors="pt", padding="max_length", pad_to_multiple_of=8, max_length=self.max_length).to(
-                self.model.device, dtype=torch.bfloat16
+                self.device, dtype=torch.bfloat16
             )
-
-            if self.device_map == "auto":
-                inputs = inputs.to("cuda")
-            else:
-                inputs = inputs.to(self.device)
 
             # Set default generation kwargs
             default_gen_kwargs = {

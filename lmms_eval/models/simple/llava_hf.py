@@ -86,7 +86,7 @@ class LlavaHf(lmms):
             self.device_map = f"cuda:{accelerator.local_process_index}"
         else:
             self._device = torch.device(device)
-            self.device_map = device_map
+            self.device_map = device_map if device_map else device
         if isinstance(dtype, str) and dtype != "auto":
             dtype = getattr(torch, dtype)
 
@@ -98,6 +98,12 @@ class LlavaHf(lmms):
 
         self.pretrained = pretrained
         self._image_processor = AutoProcessor.from_pretrained(pretrained, revision=revision, trust_remote_code=trust_remote_code)
+        # Auto-fill processor patch_size from vision config when missing (e.g. BiMediX2)
+        if getattr(self._image_processor, "patch_size", None) is None:
+            vision_cfg = getattr(config, "vision_config", None)
+            if vision_cfg and getattr(vision_cfg, "patch_size", None):
+                self._image_processor.patch_size = vision_cfg.patch_size
+                self._image_processor.vision_feature_select_strategy = getattr(config, "vision_feature_select_strategy", "default")
         # Pad from left for batched generation: https://huggingface.co/docs/transformers/v4.39.3/en/model_doc/llava#usage-tips
         self._image_processor.tokenizer.padding_side = "left"
         self._tokenizer = self._image_processor.tokenizer

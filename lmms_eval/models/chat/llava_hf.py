@@ -27,6 +27,27 @@ VICUNA_CHAT_TEMPLATE = "{% for message in messages %}{% if loop.index0 == 0 %}A 
 class LlavaHf(LlavaHfSimple):
     is_simple = False
 
+    def _apply_tokenizer_chat_template(self, messages: list) -> str:
+        """Fallback: use tokenizer.apply_chat_template when processor lacks it."""
+        if self.chat_template is not None:
+            self.tokenizer.chat_template = self.chat_template
+        elif self.tokenizer.chat_template is None:
+            self.tokenizer.chat_template = VICUNA_CHAT_TEMPLATE
+        # Flatten multimodal content blocks to text with <image> tokens
+        text_messages = []
+        for msg in messages:
+            content = msg.get("content", "")
+            if isinstance(content, list):
+                parts = []
+                for block in content:
+                    if block.get("type") == "image":
+                        parts.append(DEFAULT_IMAGE_TOKEN)
+                    elif block.get("type") == "text":
+                        parts.append(block.get("text", ""))
+                content = "\n".join(parts)
+            text_messages.append({"role": msg["role"], "content": content})
+        return self.tokenizer.apply_chat_template(text_messages, tokenize=False, add_generation_prompt=True)
+
     def generate_until(self, requests: List[Instance]) -> List[str]:
         res = []
 
@@ -59,9 +80,15 @@ class LlavaHf(LlavaHfSimple):
             videos = self.flatten(videos)
             assert self.batch_size_per_gpu == 1, "Do not support batch_size_per_gpu > 1 for now"
 
-            # Apply chat template
+            # Apply chat template with fallback
             messages = chat_messages[0].model_dump()["messages"]
-            text = self._image_processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+            if hasattr(self._image_processor, "apply_chat_template"):
+                try:
+                    text = self._image_processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+                except (ValueError, AttributeError):
+                    text = self._apply_tokenizer_chat_template(messages)
+            else:
+                text = self._apply_tokenizer_chat_template(messages)
             if self.accelerator.is_main_process and doc_id[0] % 100 == 0:
                 eval_logger.debug(f"Prompt for doc ID {doc_id[0]}:\n\n{text}\n")
 
