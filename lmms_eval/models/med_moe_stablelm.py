@@ -45,7 +45,7 @@ class Med_MoE_StableLM(lmms):
 
     def __init__(
         self,
-        pretrained: str = "/mnt/data/haoqiang/workspace/models/Med-MoE/stage3/llavastablelm-1.6b-medmoe",
+        pretrained: str = "JsST/Med-MoE/stage3/llavastablelm-1.6b-medmoe",
         device: Optional[str] = "cuda",
         batch_size: Optional[Union[int, str]] = 1,
         trust_remote_code: Optional[bool] = True,
@@ -55,6 +55,16 @@ class Med_MoE_StableLM(lmms):
         super().__init__()
         # Do not use kwargs for now
         assert kwargs == {}, f"Unexpected kwargs: {kwargs}"
+
+        # MoE gating uses deepspeed.comm.all_reduce, which requires
+        # a distributed backend. Initialize one for single-GPU eval.
+        if not torch.distributed.is_initialized():
+            torch.distributed.init_process_group(
+                backend="nccl", init_method="tcp://127.0.0.1:29766",
+                world_size=1, rank=0,
+            )
+        import deepspeed
+        deepspeed.init_distributed(dist_backend="nccl")
 
         accelerator = Accelerator()
         if accelerator.num_processes > 1:

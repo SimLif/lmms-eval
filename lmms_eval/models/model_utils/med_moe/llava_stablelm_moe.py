@@ -22,7 +22,7 @@ import torch.nn as nn
 from einops import rearrange
 from torch.nn import CrossEntropyLoss
 from torch.nn import functional as F
-from transformers import AutoConfig, AutoModelForCausalLM
+from transformers import AutoConfig, AutoModelForCausalLM, Cache, DynamicCache, GenerationMixin
 from transformers.modeling_outputs import CausalLMOutputWithPast
 from transformers.models.llama.modeling_llama import logger
 from transformers.utils import ModelOutput
@@ -182,6 +182,13 @@ def MoEStablelmModel_forward(self):
         seq_length_with_past = seq_length
         past_key_values_length = 0
 
+        # Convert DynamicCache to legacy tuple format for compatibility
+        if past_key_values is not None and isinstance(past_key_values, Cache):
+            if len(past_key_values) == 0:
+                past_key_values = None
+            else:
+                past_key_values = past_key_values.to_legacy_cache()
+
         if position_ids is None:
             device = input_ids.device if input_ids is not None else inputs_embeds.device
             position_ids = torch.arange(
@@ -305,10 +312,15 @@ class MoELLaVAStablelmForCausalLM(StableLMEpochForCausalLM, LlavaMetaForCausalLM
         output_hidden_states: Optional[bool] = None,
         images: Optional[torch.FloatTensor] = None,
         return_dict: Optional[bool] = None,
+        **kwargs,
     ) -> Union[Tuple, MoECausalLMOutputWithPast]:
-        # print('before prepare_inputs_labels_for_multimodal')
-        # import ipdb
-        # ipdb.set_trace()
+        # Convert DynamicCache to legacy format for this legacy model
+        if past_key_values is not None and isinstance(past_key_values, Cache):
+            if len(past_key_values) == 0:
+                past_key_values = None
+            else:
+                past_key_values = past_key_values.to_legacy_cache()
+
         if inputs_embeds is None:
             (input_ids, position_ids, attention_mask, past_key_values, inputs_embeds, labels) = self.prepare_inputs_labels_for_multimodal(input_ids, position_ids, attention_mask, past_key_values, labels, images)
         # import ipdb
@@ -461,7 +473,7 @@ class MoELLaVAStablelmForCausalLM(StableLMEpochForCausalLM, LlavaMetaForCausalLM
         # ipdb.set_trace()
 
 
-class EvalMoELLaVAStablelmForCausalLM(MoELLaVAStablelmForCausalLM):
+class EvalMoELLaVAStablelmForCausalLM(GenerationMixin, MoELLaVAStablelmForCausalLM):
     config_class = MoELLaVAStablelmConfig
 
     def __init__(self, config):

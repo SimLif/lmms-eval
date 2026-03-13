@@ -234,7 +234,7 @@ class Attention(nn.Module):
         key_pass = key_states[..., self.rotary_ndims :]
 
         kv_seq_len = key_states.shape[-2]
-        if past_key_value is not None:
+        if past_key_value is not None and past_key_value[0] is not None:
             kv_seq_len += past_key_value[0].shape[-2]
         cos, sin = self.rotary_emb(value_states, seq_len=kv_seq_len)
         query_states, key_states = apply_rotary_pos_emb(query_rot, key_rot, cos, sin, position_ids)
@@ -243,7 +243,7 @@ class Attention(nn.Module):
         query_states = torch.cat((query_states, query_pass), dim=-1)
         key_states = torch.cat((key_states, key_pass), dim=-1)
 
-        if past_key_value is not None:
+        if past_key_value is not None and past_key_value[0] is not None:
             # Reuse k, v, self_attention
             key_states = torch.cat((past_key_value[0], key_states), dim=2)
             value_states = torch.cat((past_key_value[1], value_states), dim=2)
@@ -335,7 +335,7 @@ class FlashAttention2(Attention):
         key_pass = key_states[..., self.rotary_ndims :]
 
         kv_seq_len = key_states.shape[-2]
-        if past_key_value is not None:
+        if past_key_value is not None and past_key_value[0] is not None:
             kv_seq_len += past_key_value[0].shape[-2]
         cos, sin = self.rotary_emb(value_states, seq_len=kv_seq_len)
         query_states, key_states = apply_rotary_pos_emb(query_rot, key_rot, cos, sin, position_ids)
@@ -344,7 +344,7 @@ class FlashAttention2(Attention):
         query_states = torch.cat((query_states, query_pass), dim=-1)
         key_states = torch.cat((key_states, key_pass), dim=-1)
 
-        if past_key_value is not None:
+        if past_key_value is not None and past_key_value[0] is not None:
             # Reuse k, v, self_attention
             key_states = torch.cat((past_key_value[0], key_states), dim=2)
             value_states = torch.cat((past_key_value[1], value_states), dim=2)

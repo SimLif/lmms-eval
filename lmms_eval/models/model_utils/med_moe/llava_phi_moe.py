@@ -21,7 +21,7 @@ import torch.nn as nn
 from einops import rearrange
 from torch.nn import CrossEntropyLoss
 from torch.nn import functional as F
-from transformers import AutoConfig, AutoModelForCausalLM, Cache, DynamicCache
+from transformers import AutoConfig, AutoModelForCausalLM, Cache, DynamicCache, GenerationMixin
 from transformers.modeling_attn_mask_utils import _prepare_4d_causal_attention_mask
 from transformers.modeling_outputs import CausalLMOutputWithPast
 from transformers.models.llama.modeling_llama import logger
@@ -179,7 +179,7 @@ def MoEPhiModel_forward(self):
             use_legacy_cache = not isinstance(past_key_values, Cache)
             if use_legacy_cache:
                 past_key_values = DynamicCache.from_legacy_cache(past_key_values)
-            past_key_values_length = past_key_values.get_usable_length(seq_length)
+            past_key_values_length = past_key_values.get_seq_length()
 
         if position_ids is None:
             device = input_ids.device if input_ids is not None else inputs_embeds.device
@@ -291,10 +291,8 @@ class MoELLaVAPhiForCausalLM(PhiForCausalLM, LlavaMetaForCausalLM):
         output_hidden_states: Optional[bool] = None,
         images: Optional[torch.FloatTensor] = None,
         return_dict: Optional[bool] = None,
+        **kwargs,
     ) -> Union[Tuple, MoECausalLMOutputWithPast]:
-        # print('before prepare_inputs_labels_for_multimodal')
-        # import ipdb
-        # ipdb.set_trace()
         if inputs_embeds is None:
             (input_ids, position_ids, attention_mask, past_key_values, inputs_embeds, labels) = self.prepare_inputs_labels_for_multimodal(input_ids, position_ids, attention_mask, past_key_values, labels, images)
         # import ipdb
@@ -460,7 +458,7 @@ class MoELLaVAPhiForCausalLM(PhiForCausalLM, LlavaMetaForCausalLM):
         # ipdb.set_trace()
 
 
-class EvalMoELLaVAPhiForCausalLM(MoELLaVAPhiForCausalLM):
+class EvalMoELLaVAPhiForCausalLM(GenerationMixin, MoELLaVAPhiForCausalLM):
     config_class = MoELLaVAPhiConfig
 
     def __init__(self, config):
