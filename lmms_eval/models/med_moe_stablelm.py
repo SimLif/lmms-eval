@@ -190,6 +190,8 @@ class Med_MoE_StableLM(lmms):
     def flatten(self, input):
         new_list = []
         for i in input:
+            if i is None:
+                continue
             for j in i:
                 new_list.append(j)
         return new_list
@@ -241,12 +243,19 @@ class Med_MoE_StableLM(lmms):
             if "<image>" in context:
                 context = context.replace("<image>", "")
 
+            # Handle multi-image: use first image only (model limitation)
             if len(visuals) > 1:
-                raise ValueError("Only one visual is supported for now")
-            image_tensor = self._image_processor.preprocess(visuals[0], return_tensors="pt")["pixel_values"].to(self.model.device, dtype=torch.float16)
+                visuals = visuals[:1]
+
+            # Handle text-only tasks (no images)
+            if len(visuals) == 0:
+                image_tensor = None
+            else:
+                image_tensor = self._image_processor.preprocess(visuals[0], return_tensors="pt")["pixel_values"].to(self.model.device, dtype=torch.float16)
 
             conv = self._conv_templates.copy()
-            context = DEFAULT_IMAGE_TOKEN + "\n" + context
+            if image_tensor is not None:
+                context = DEFAULT_IMAGE_TOKEN + "\n" + context
             conv.append_message(conv.roles[0], context)
             conv.append_message(conv.roles[1], None)
             prompt = conv.get_prompt()

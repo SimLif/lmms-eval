@@ -243,7 +243,7 @@ class Gemma3(lmms):
                     contexts[i] = context
 
                 processed_visuals = []
-                for visual in visual_list[i]:
+                for visual in (visual_list[i] or []):
                     try:
                         if isinstance(visual, str) and visual.endswith((".mp4", ".avi", ".mov")):  # Video file
                             if not os.path.exists(visual):
