@@ -9,6 +9,7 @@ Usage:
     Defaults: full_dir=logs/med_eval  mini_dir=logs/med_eval_mini
 """
 
+import argparse
 import json
 import sys
 from pathlib import Path
@@ -57,7 +58,10 @@ def load_latest_results(log_dir: Path) -> dict[str, dict]:
 
 
 def get_value(
-    data: dict, key: str, metric: str,
+    data: dict,
+    key: str,
+    metric: str,
+    judge_model: str | None = None,
 ) -> float | None:
     """Extract metric value with LLM judge validation."""
     if key in GROUPS_REQUIRING_LLM_JUDGE:
@@ -65,6 +69,17 @@ def get_value(
         open_result = data.get("results", {}).get(open_task, {})
         if "llm_judge,none" not in open_result:
             return None
+
+    # When judge_model is specified and metric is llm_judge, read from
+    # llm_judges[judge_model] instead of the default llm_judge,none
+    if judge_model is not None and metric == "llm_judge,none":
+        val = data.get("results", {}).get(key, {}).get(
+            "llm_judges", {}
+        ).get(judge_model)
+        if isinstance(val, (int, float)):
+            return float(val)
+        return None
+
     val = data.get("results", {}).get(key, {}).get(metric)
     if isinstance(val, (int, float)):
         return float(val)
@@ -83,8 +98,40 @@ def compute_spearman(
 
 
 def main() -> None:
-    full_dir = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("logs/med_eval")
-    mini_dir = Path(sys.argv[2]) if len(sys.argv) > 2 else Path("logs/med_eval_mini")
+    parser = argparse.ArgumentParser(
+        description=(
+            "Compare med_eval_mini vs med_eval (full) results via "
+            "Spearman rank correlation."
+        )
+    )
+    parser.add_argument(
+        "full_dir",
+        nargs="?",
+        default="logs/med_eval",
+        help="Path to full eval logs directory (default: logs/med_eval)",
+    )
+    parser.add_argument(
+        "mini_dir",
+        nargs="?",
+        default="logs/med_eval_mini",
+        help=(
+            "Path to mini eval logs directory "
+            "(default: logs/med_eval_mini)"
+        ),
+    )
+    parser.add_argument(
+        "--judge_model",
+        type=str,
+        default=None,
+        help=(
+            "Judge model name to read llm_judge scores from "
+            "(reads from llm_judges[judge_model] instead of llm_judge,none)"
+        ),
+    )
+    args = parser.parse_args()
+
+    full_dir = Path(args.full_dir)
+    mini_dir = Path(args.mini_dir)
 
     for d in [full_dir, mini_dir]:
         if not d.exists():
@@ -100,8 +147,10 @@ def main() -> None:
         print("No common models found between full and mini results.")
         sys.exit(1)
 
-    print(f"Full models: {len(full_models)}, Mini models: {len(mini_models)}, "
-          f"Common: {len(common)}")
+    print(
+        f"Full models: {len(full_models)}, Mini models: {len(mini_models)}, "
+        f"Common: {len(common)}"
+    )
     print()
 
     # === Per-task correlation ===
@@ -121,8 +170,12 @@ def main() -> None:
         valid_models = []
 
         for model in common:
-            fv = get_value(full_models[model], fkey, fmetric)
-            mv = get_value(mini_models[model], mkey, mmetric)
+            fv = get_value(
+                full_models[model], fkey, fmetric, args.judge_model
+            )
+            mv = get_value(
+                mini_models[model], mkey, mmetric, args.judge_model
+            )
             if fv is not None and mv is not None:
                 full_vals.append(fv)
                 mini_vals.append(mv)
@@ -138,7 +191,10 @@ def main() -> None:
             note = f"({mkey} vs {fkey})"
 
         if len(full_vals) < 3:
-            print(f"{name:<16} {'N/A':>8} {'N/A':>10} {len(full_vals):>4}  {note}")
+            print(
+                f"{name:<16} {'N/A':>8} {'N/A':>10} "
+                f"{len(full_vals):>4}  {note}"
+            )
             continue
 
         rho, pval, n = compute_spearman(full_vals, mini_vals)
@@ -162,8 +218,12 @@ def main() -> None:
         f_scores = []
         m_scores = []
         for name, fkey, fmetric, mkey, mmetric in TASK_MAP:
-            fv = get_value(full_models[model], fkey, fmetric)
-            mv = get_value(mini_models[model], mkey, mmetric)
+            fv = get_value(
+                full_models[model], fkey, fmetric, args.judge_model
+            )
+            mv = get_value(
+                mini_models[model], mkey, mmetric, args.judge_model
+            )
             if fv is not None and mv is not None:
                 f_scores.append(fv)
                 m_scores.append(mv)
@@ -176,7 +236,9 @@ def main() -> None:
         rho, pval, n = compute_spearman(full_avgs, mini_avgs)
         print(f"Aggregate ρ = {rho:.4f}  (p = {pval:.4f}, N = {n} models)")
     else:
-        print(f"Not enough models with sufficient data (have {len(full_avgs)})")
+        print(
+            f"Not enough models with sufficient data (have {len(full_avgs)})"
+        )
 
     print()
 
@@ -202,7 +264,9 @@ def main() -> None:
         sub = [r for r, (n, fk, fm, mk, mm) in zip(task_rhos, TASK_MAP)
                if fk != mk]
         if sub:
-            print(f"Mean ρ (subsampled tasks only): {sum(sub)/len(sub):.4f}")
+            print(
+                f"Mean ρ (subsampled tasks only): {sum(sub)/len(sub):.4f}"
+            )
 
 
 if __name__ == "__main__":

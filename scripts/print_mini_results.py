@@ -8,6 +8,7 @@ Usage:
     Default logs_dir: logs/med_eval_mini
 """
 
+import argparse
 import json
 import sys
 from pathlib import Path
@@ -47,12 +48,25 @@ def load_results(log_dir: Path) -> tuple[dict, str] | None:
     return data, model_name
 
 
-def get_value(data: dict, key: str, metric: str) -> float | None:
+def get_value(
+    data: dict, key: str, metric: str, judge_model: str | None = None
+) -> float | None:
     if key in GROUPS_REQUIRING_LLM_JUDGE:
         open_task = GROUPS_REQUIRING_LLM_JUDGE[key]
         open_result = data.get("results", {}).get(open_task, {})
         if "llm_judge,none" not in open_result:
             return None
+
+    # When judge_model is specified and metric is llm_judge, read from
+    # llm_judges[judge_model] instead of the default llm_judge,none
+    if judge_model is not None and metric == "llm_judge,none":
+        val = data.get("results", {}).get(key, {}).get(
+            "llm_judges", {}
+        ).get(judge_model)
+        if isinstance(val, (int, float)):
+            return val
+        return None
+
     val = data.get("results", {}).get(key, {}).get(metric)
     if isinstance(val, (int, float)):
         return val
@@ -69,7 +83,27 @@ def compute_avg(values: list[float | None]) -> float | None:
 
 
 def main() -> None:
-    logs_dir = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("logs/med_eval_mini")
+    parser = argparse.ArgumentParser(
+        description="Print consolidated TSV results for med_eval_mini."
+    )
+    parser.add_argument(
+        "logs_dir",
+        nargs="?",
+        default="logs/med_eval_mini",
+        help="Path to logs directory (default: logs/med_eval_mini)",
+    )
+    parser.add_argument(
+        "--judge_model",
+        type=str,
+        default=None,
+        help=(
+            "Judge model name to read llm_judge scores from "
+            "(reads from llm_judges[judge_model] instead of llm_judge,none)"
+        ),
+    )
+    args = parser.parse_args()
+
+    logs_dir = Path(args.logs_dir)
 
     if not logs_dir.exists():
         print(f"Error: {logs_dir} does not exist")
@@ -97,7 +131,10 @@ def main() -> None:
     print("\t".join(headers))
 
     for data, model_name in all_results:
-        values = [get_value(data, key, metric) for _, key, metric in MINI_TASKS]
+        values = [
+            get_value(data, key, metric, args.judge_model)
+            for _, key, metric in MINI_TASKS
+        ]
         avg = compute_avg(values)
         row = [model_name] + [fmt(v) for v in values] + [fmt(avg)]
         print("\t".join(row))

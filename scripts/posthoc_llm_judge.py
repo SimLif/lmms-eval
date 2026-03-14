@@ -29,7 +29,6 @@ import json
 import math
 import os
 import sys
-from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
@@ -130,52 +129,55 @@ def run_judge_on_task(
 
     total = len(samples)
 
-    # Skip already-judged samples (unless force=True)
-    already_judged = sum(1 for s in samples if "llm_judge" in s)
+    # Auto-migrate old format: llm_judge -> llm_judges dict
+    for sample in samples:
+        if "llm_judge" in sample and "llm_judges" not in sample:
+            old_model = sample.get("llm_judge_model", "unknown")
+            sample["llm_judges"] = {old_model: sample["llm_judge"]}
+
+    # Skip check: count samples already judged by this specific model
+    already_judged = sum(
+        1 for s in samples
+        if s.get("llm_judges", {}).get(judge_model_name) is not None
+    )
+
     if already_judged == total and not force:
-        # Report which model previously scored these samples
-        prev_models = Counter(
-            s.get("llm_judge_model", "unknown") for s in samples
-        )
-        prev_str = ", ".join(
-            f"{m}({n})" for m, n in prev_models.most_common()
-        )
-        scores = [s["llm_judge"] for s in samples]
+        scores = [
+            s.get("llm_judges", {}).get(judge_model_name, 0.0)
+            for s in samples
+        ]
         correct = sum(1 for sc in scores if sc > 0)
         mean_score = sum(scores) / len(scores)
         stderr = float(np.std(scores, ddof=1) / np.sqrt(len(scores)))
         print(
             f"  [{task_name}] All {total} samples already judged "
-            f"(by {prev_str}), skipping."
+            f"by {judge_model_name}, skipping."
         )
         return total, correct, mean_score, stderr
 
-    # Clear existing scores if force=True
+    # Force: only clear this judge's entry, not all judges
     if force and already_judged > 0:
-        prev_models = Counter(
-            s.get("llm_judge_model", "unknown")
-            for s in samples
-            if "llm_judge" in s
-        )
-        prev_str = ", ".join(
-            f"{m}({n})" for m, n in prev_models.most_common()
-        )
         print(
             f"  [{task_name}] WARNING: --force overwriting {already_judged} "
-            f"existing scores (by {prev_str}) with {judge_model_name}"
+            f"existing scores for {judge_model_name}"
         )
         for sample in samples:
-            if "llm_judge" in sample:
-                del sample["llm_judge"]
-            if "llm_judge_model" in sample:
-                del sample["llm_judge_model"]
+            judges = sample.setdefault("llm_judges", {})
+            if judge_model_name in judges:
+                del judges[judge_model_name]
+            # Clear backward-compat fields only if they point to current judge
+            if sample.get("llm_judge_model") == judge_model_name:
+                if "llm_judge" in sample:
+                    del sample["llm_judge"]
+                if "llm_judge_model" in sample:
+                    del sample["llm_judge_model"]
         already_judged = 0
 
-    # Prepare work items
+    # Prepare work items: skip samples already scored by this judge
     work_items = []
     for i, sample in enumerate(samples):
-        if "llm_judge" in sample:
-            continue  # Skip already judged
+        if sample.get("llm_judges", {}).get(judge_model_name) is not None:
+            continue  # Already judged by this model
 
         question = sample.get("input", "")
         target = sample.get("target", "")
@@ -195,7 +197,10 @@ def run_judge_on_task(
     )
 
     if dry_run:
-        scores = [s.get("llm_judge", 0.0) for s in samples]
+        scores = [
+            s.get("llm_judges", {}).get(judge_model_name, 0.0)
+            for s in samples
+        ]
         correct = sum(1 for sc in scores if sc > 0)
         mean_score = sum(scores) / len(scores) if scores else 0.0
         stderr = (
@@ -207,7 +212,8 @@ def run_judge_on_task(
     else:
         completed = 0
         correct_so_far = sum(
-            1 for s in samples if s.get("llm_judge", 0) > 0
+            1 for s in samples
+            if s.get("llm_judges", {}).get(judge_model_name, 0) > 0
         )
 
         with ThreadPoolExecutor(max_workers=workers) as executor:
@@ -220,6 +226,10 @@ def run_judge_on_task(
 
             for future in as_completed(futures):
                 idx, score = future.result()
+                samples[idx].setdefault("llm_judges", {})[
+                    judge_model_name
+                ] = score
+                # Update backward-compat fields to point to current judge
                 samples[idx]["llm_judge"] = score
                 samples[idx]["llm_judge_model"] = judge_model_name
                 completed += 1
@@ -234,12 +244,22 @@ def run_judge_on_task(
                         f"{correct_so_far / total_done * 100:.1f}%)"
                     )
 
+    # Ensure every sample's llm_judge/llm_judge_model points to current judge
+    for sample in samples:
+        judge_score = sample.get("llm_judges", {}).get(judge_model_name)
+        if judge_score is not None:
+            sample["llm_judge"] = judge_score
+            sample["llm_judge_model"] = judge_model_name
+
     # Write updated samples
     with open(filepath, "w") as f:
         for sample in samples:
             f.write(json.dumps(sample, ensure_ascii=False) + "\n")
 
-    scores = [s.get("llm_judge", 0.0) for s in samples]
+    scores = [
+        s.get("llm_judges", {}).get(judge_model_name, 0.0)
+        for s in samples
+    ]
     correct = sum(1 for sc in scores if sc > 0)
     mean_score = sum(scores) / len(scores) if scores else 0.0
     stderr = (
@@ -275,17 +295,23 @@ def update_results_json(
     # Update judge scores with stderr
     for task_name, (score, stderr, n) in judge_results.items():
         if task_name in results.get("results", {}):
-            results["results"][task_name]["llm_judge,none"] = score
-            results["results"][task_name]["llm_judge_stderr,none"] = stderr
-            results["results"][task_name]["llm_judge_stderr_clt,none"] = (
-                stderr
-            )
-            results["results"][task_name][
-                "llm_judge_stderr_clustered,none"
-            ] = "N/A"
-            results["results"][task_name]["llm_judge_model"] = (
-                judge_model_name
-            )
+            task_dict = results["results"][task_name]
+
+            # Auto-migrate old llm_judges if missing
+            if "llm_judge,none" in task_dict and "llm_judges" not in task_dict:
+                old_model = task_dict.get("llm_judge_model", "unknown")
+                old_score = task_dict["llm_judge,none"]
+                task_dict["llm_judges"] = {old_model: old_score}
+
+            # Set backward-compat fields
+            task_dict["llm_judge,none"] = score
+            task_dict["llm_judge_stderr,none"] = stderr
+            task_dict["llm_judge_stderr_clt,none"] = stderr
+            task_dict["llm_judge_stderr_clustered,none"] = "N/A"
+            task_dict["llm_judge_model"] = judge_model_name
+
+            # Set per-judge entry (flat, no nested stderr)
+            task_dict.setdefault("llm_judges", {})[judge_model_name] = score
 
     # Compute group-level accuracy (open llm_judge + closed accuracy)
     groups = {
@@ -334,6 +360,7 @@ def update_results_json(
             "alias": f" - {group}",
             "accuracy,none": overall_acc,
             "accuracy_stderr,none": overall_se,
+            "llm_judge_model": judge_model_name,
         }
         print(
             f"  Group {group}: "

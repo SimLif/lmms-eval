@@ -7,6 +7,7 @@ Usage:
     python scripts/print_results.py <log_dir>
 """
 
+import argparse
 import json
 import sys
 from pathlib import Path
@@ -113,7 +114,9 @@ def _fmt(val: float | None, se: float | None) -> str:
 # ── collect all values ───────────────────────────────────────────────
 
 def _collect_acc(
-    tasks: list[tuple[str, str, str, str]], data: dict
+    tasks: list[tuple[str, str, str, str]],
+    data: dict,
+    judge_model: str | None = None,
 ) -> list[tuple[str, float | None, float | None]]:
     rows = []
     for display, key, metric, stderr in tasks:
@@ -126,6 +129,17 @@ def _collect_acc(
                 # LLM judge missing for open task, group accuracy is incomplete
                 rows.append((display, None, None))
                 continue
+
+        # When judge_model is specified and metric is llm_judge, read from
+        # llm_judges[judge_model] instead of the default llm_judge,none
+        if judge_model is not None and metric == "llm_judge,none":
+            task_dict = data.get("results", {}).get(key, {})
+            val = task_dict.get("llm_judges", {}).get(judge_model)
+            if isinstance(val, (int, float)):
+                rows.append((display, val, None))
+            else:
+                rows.append((display, None, None))
+            continue
 
         val, se = _get(data, key, metric, stderr)
         rows.append((display, val, se))
@@ -248,20 +262,30 @@ def _print_tsv_report(
 # ── main ─────────────────────────────────────────────────────────────
 
 def main() -> None:
-    if len(sys.argv) < 2:
-        print(
-            "Usage: python scripts/print_results.py <log_dir>\n"
-            "  e.g. python scripts/print_results.py "
-            "logs/med_eval_qwen25vl_3b/Qwen__Qwen2.5-VL-3B-Instruct"
-        )
-        sys.exit(1)
+    parser = argparse.ArgumentParser(
+        description="Print a human-readable summary of med-eval results."
+    )
+    parser.add_argument(
+        "log_dir",
+        help="Path to log directory containing *_results.json",
+    )
+    parser.add_argument(
+        "--judge_model",
+        type=str,
+        default=None,
+        help=(
+            "Judge model name to read llm_judge scores from "
+            "(reads from llm_judges[judge_model] instead of llm_judge,none)"
+        ),
+    )
+    args = parser.parse_args()
 
-    data, model = _load_results(sys.argv[1])
+    data, model = _load_results(args.log_dir)
     print(f"Model: {model}\n")
 
-    mm_rows = _collect_acc(MM_TASKS, data)
+    mm_rows = _collect_acc(MM_TASKS, data, judge_model=args.judge_model)
     mm_avg = _avg(mm_rows)
-    text_rows = _collect_acc(TEXT_TASKS, data)
+    text_rows = _collect_acc(TEXT_TASKS, data, judge_model=args.judge_model)
     text_avg = _avg(text_rows)
     report = _collect_report(data)
 
