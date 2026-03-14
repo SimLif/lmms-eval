@@ -23,7 +23,7 @@ class AsyncOpenAIProvider(AsyncServerInterface):
         try:
             from openai import AsyncOpenAI
 
-            self.async_client = AsyncOpenAI(api_key=self.api_key)
+            self.async_client = AsyncOpenAI(api_key=self.api_key, base_url=self.api_url)
             self.use_async_client = True
         except ImportError:
             eval_logger.warning("AsyncOpenAI client not available, using aiohttp")
