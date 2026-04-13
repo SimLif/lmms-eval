@@ -1,0 +1,224 @@
+# med_eval_mini 评估配置
+# 用法: uv run python scripts/run_eval.py -c scripts/configs/med_eval_mini.yaml
+#
+# 所有 pixels 值显式声明，不依赖模型代码默认值。
+# 仅在支持的模型上设置 max_pixels / min_pixels / attn_implementation。
+# transformers_version 仅在需要非当前版本的模型上声明。
+
+defaults:
+  task: med_eval_mini
+  num_gpus: 8
+  accelerate_port: 12346
+  batch_size: 32
+  output_dir: logs/med_eval_mini
+  vllm_tp: 8
+  vllm_gpu_util: 0.80
+  log_samples: true
+  skip_if_done: false
+  default_transformers_version: "4.57.6"
+  default_vllm_version: "0.11.0"
+  env:
+    LMMS_EVAL_USE_CACHE: "True"
+
+models:
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  #  Qwen 2.5 VL  (patch=14, factor=28)
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  - name: Qwen2.5-VL-3B-Instruct
+    model_type: qwen2_5_vl
+    pretrained: Qwen/Qwen2.5-VL-3B-Instruct
+    launch: multi
+    params: 3B
+    max_pixels: 3211264          # 576 * 28 * 28
+    min_pixels: 200704           # 256 * 28 * 28
+    attn_implementation: sdpa
+    tags: [qwen2.5]
+
+  - name: Qwen2.5-VL-7B-Instruct
+    model_type: qwen2_5_vl
+    pretrained: Qwen/Qwen2.5-VL-7B-Instruct
+    launch: multi
+    params: 7B
+    max_pixels: 3211264
+    min_pixels: 200704
+    attn_implementation: sdpa
+    tags: [qwen2.5]
+
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  #  Qwen 3 VL  (patch=16, factor=32)
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  - name: Qwen3-VL-2B-Instruct
+    params: 2B
+    model_type: qwen3_vl
+    pretrained: Qwen/Qwen3-VL-2B-Instruct
+    launch: multi
+    max_pixels: 3211264
+    min_pixels: 200704
+    attn_implementation: sdpa
+    tags: [qwen3]
+
+  - name: Qwen3-VL-4B-Instruct
+    params: 4B
+    model_type: qwen3_vl
+    pretrained: Qwen/Qwen3-VL-4B-Instruct
+    launch: multi
+    max_pixels: 3211264
+    min_pixels: 200704
+    attn_implementation: sdpa
+    tags: [qwen3]
+
+  - name: Qwen3-VL-8B-Instruct
+    params: 8B
+    model_type: qwen3_vl
+    pretrained: Qwen/Qwen3-VL-8B-Instruct
+    launch: multi
+    max_pixels: 3211264
+    min_pixels: 200704
+    attn_implementation: sdpa
+    tags: [qwen3]
+
+  - name: Qwen3-VL-30B-A3B-Instruct
+    params: "30B(3B)"
+    model_type: qwen3_vl
+    pretrained: Qwen/Qwen3-VL-30B-A3B-Instruct
+    launch: single               # device_map=auto
+    max_pixels: 3211264
+    min_pixels: 200704
+    attn_implementation: sdpa
+    tags: [qwen3]
+
+  - name: Qwen3-VL-32B-Instruct
+    params: 32B
+    model_type: qwen3_vl
+    pretrained: Qwen/Qwen3-VL-32B-Instruct
+    launch: single
+    max_pixels: 3211264
+    min_pixels: 200704
+    attn_implementation: sdpa
+    tags: [qwen3]
+
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  #  InternVL  (不设 pixels / attn)
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  - name: InternVL2_5-8B
+    params: 8B
+    model_type: internvl2
+    pretrained: OpenGVLab/InternVL2_5-8B
+    launch: multi
+    transformers_version: "4.49.0"
+    tags: [internvl]
+
+  - name: InternVL3-8B
+    params: 8B
+    model_type: internvl3
+    pretrained: OpenGVLab/InternVL3-8B
+    launch: multi
+    tags: [internvl]
+
+  - name: InternVL3_5-8B
+    params: 8B
+    model_type: internvl3_5
+    pretrained: OpenGVLab/InternVL3_5-8B
+    launch: multi
+    tags: [internvl]
+
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  #  Qwen 3.5  (patch=16, factor=32, transformers 5.2.0)
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  - name: Qwen3.5-2B
+    params: 2B
+    model_type: qwen3_5
+    pretrained: Qwen/Qwen3.5-2B
+    launch: multi
+    transformers_version: "5.2.0"
+    max_pixels: 3211264
+    min_pixels: 200704
+    attn_implementation: sdpa
+    tags: [qwen3.5]
+
+  - name: Qwen3.5-4B
+    params: 4B
+    model_type: qwen3_5
+    pretrained: Qwen/Qwen3.5-4B
+    launch: multi
+    transformers_version: "5.2.0"
+    max_pixels: 3211264
+    min_pixels: 200704
+    attn_implementation: sdpa
+    tags: [qwen3.5]
+
+  - name: Qwen3.5-9B
+    params: 9B
+    model_type: qwen3_5
+    pretrained: Qwen/Qwen3.5-9B
+    launch: multi
+    transformers_version: "5.2.0"
+    max_pixels: 3211264
+    min_pixels: 200704
+    attn_implementation: sdpa
+    tags: [qwen3.5]
+
+  - name: Qwen3.5-2B-thinking
+    params: 2B
+    model_type: qwen3_5
+    pretrained: Qwen/Qwen3.5-2B
+    launch: multi
+    transformers_version: "5.2.0"
+    max_pixels: 3211264
+    min_pixels: 200704
+    attn_implementation: sdpa
+    enable_thinking: true
+    max_thinking_tokens: 512
+    gen_kwargs:
+      temperature: 1.0
+      top_p: 0.95
+      max_new_tokens: 1024
+    tags: [qwen3.5, thinking]
+
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  #  Medical Baselines  (不设 pixels / attn / transformers_version)
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  - name: HuatuoGPT-Vision-7B
+    params: 7B
+    model_type: qwen2_5_vl
+    pretrained: FreedomIntelligence/HuatuoGPT-Vision-7B-Qwen2.5VL
+    launch: single
+    gpu: 0
+    batch_size: 1
+    tags: [baseline]
+
+  - name: MedGemma-4b-it
+    params: 4B
+    model_type: gemma3
+    pretrained: google/medgemma-4b-it
+    launch: single
+    gpu: 1
+    batch_size: 1
+    tags: [baseline]
+
+  - name: LLaVA-Med-v1.5
+    params: 7B
+    model_type: llava_hf
+    pretrained: chaoyinshe/llava-med-v1.5-mistral-7b-hf
+    launch: single
+    gpu: 2
+    batch_size: 1
+    tags: [baseline]
+
+  - name: Med-MoE-Phi
+    params: 2.7B
+    model_type: med_moe_phi
+    pretrained: /root/paddlejob/workspace/env_run/hqguo/models/Med-MoE/stage3/llavaphi-2.7b-medmoe
+    launch: single
+    gpu: 3
+    batch_size: 1
+    tags: [baseline]
+
+  - name: Med-MoE-StableLM
+    params: 1.6B
+    model_type: med_moe_stablelm
+    pretrained: /root/paddlejob/workspace/env_run/hqguo/models/Med-MoE/stage3/llavastablelm-1.6b-medmoe
+    launch: single
+    gpu: 4
+    batch_size: 1
+    tags: [baseline]

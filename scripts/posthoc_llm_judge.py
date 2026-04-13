@@ -430,6 +430,37 @@ def main():
         help="Judge model name, e.g. Qwen/Qwen3-VL-32B "
         "(default: $JUDGE_MODEL)",
     )
+    # Auto-serve: automatically start/stop a local vLLM judge server
+    parser.add_argument(
+        "--auto_serve",
+        action="store_true",
+        help="Auto start a local vLLM judge server, run judge, then stop. "
+        "No need to manually manage the server.",
+    )
+    parser.add_argument(
+        "--serve_gpu_ids",
+        type=str,
+        default="0,1,2,3",
+        help="GPU IDs for auto-serve (comma-separated, default: 0,1,2,3)",
+    )
+    parser.add_argument(
+        "--serve_tp",
+        type=int,
+        default=None,
+        help="Tensor parallel size for auto-serve (default: number of GPUs)",
+    )
+    parser.add_argument(
+        "--serve_port",
+        type=int,
+        default=8000,
+        help="Port for auto-serve (default: 8000)",
+    )
+    parser.add_argument(
+        "--serve_timeout",
+        type=int,
+        default=600,
+        help="Max seconds to wait for server startup (default: 600)",
+    )
     args = parser.parse_args()
 
     sample_files = find_sample_files(args.results_dir)
@@ -441,34 +472,63 @@ def main():
     judge_model_name = ""
 
     if args.run_judge:
-        server, judge_model_name = create_judge_server(args)
-        print(
-            f"\n=== LLM Judge Scoring ==="
-            f"\n  Model:   {judge_model_name}"
-            f"\n  Workers: {args.workers}"
-            f"\n  Force:   {args.force}"
-        )
+        # Determine if we need auto-serve
+        serve_ctx = None
+        if args.auto_serve:
+            from lmms_eval.llm_judge.launcher import get_launcher
 
-        for task_name in JUDGE_TASKS:
-            if task_name not in sample_files:
-                print(f"  Skipping {task_name}: no sample file found")
-                continue
+            judge_model_name = args.judge_model or os.getenv("JUDGE_MODEL", "Qwen/Qwen3-VL-32B-Instruct")
+            tp = args.serve_tp or len(args.serve_gpu_ids.split(","))
 
-            print(f"\nProcessing {task_name}...")
-            total, correct, mean_score, stderr = run_judge_on_task(
-                sample_files[task_name],
-                task_name,
-                server=server,
-                judge_model_name=judge_model_name,
-                workers=args.workers,
-                dry_run=args.dry_run,
-                force=args.force,
+            VLLMLauncher = get_launcher("vllm")
+            serve_ctx = VLLMLauncher(
+                model=judge_model_name,
+                port=args.serve_port,
+                tp=tp,
+                gpu_ids=args.serve_gpu_ids,
+                timeout=args.serve_timeout,
             )
-            judge_results[task_name] = (mean_score, stderr, total)
+            # Override API settings to point to local server
+            args.judge_api_type = "openai"
+            args.judge_api_url = f"http://localhost:{args.serve_port}/v1"
+            args.judge_model = judge_model_name
+
+        def _run_judge():
+            nonlocal judge_model_name, judge_results
+            server, judge_model_name = create_judge_server(args)
             print(
-                f"  Result: {correct}/{total} correct, "
-                f"mean llm_judge = {mean_score:.1f} ± {stderr:.2f}"
+                f"\n=== LLM Judge Scoring ==="
+                f"\n  Model:   {judge_model_name}"
+                f"\n  Workers: {args.workers}"
+                f"\n  Force:   {args.force}"
             )
+
+            for task_name in JUDGE_TASKS:
+                if task_name not in sample_files:
+                    print(f"  Skipping {task_name}: no sample file found")
+                    continue
+
+                print(f"\nProcessing {task_name}...")
+                total, correct, mean_score, stderr = run_judge_on_task(
+                    sample_files[task_name],
+                    task_name,
+                    server=server,
+                    judge_model_name=judge_model_name,
+                    workers=args.workers,
+                    dry_run=args.dry_run,
+                    force=args.force,
+                )
+                judge_results[task_name] = (mean_score, stderr, total)
+                print(
+                    f"  Result: {correct}/{total} correct, "
+                    f"mean llm_judge = {mean_score:.1f} ± {stderr:.2f}"
+                )
+
+        if serve_ctx is not None:
+            with serve_ctx:
+                _run_judge()
+        else:
+            _run_judge()
 
     if judge_results:
         update_results_json(

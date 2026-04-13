@@ -1,4 +1,6 @@
 #!/bin/bash
+# DEPRECATED: Use run_eval.py instead:
+#   uv run python scripts/run_eval.py -c scripts/configs/med_eval_mini.yaml --task med_eval
 set -euo pipefail
 
 # Med-eval benchmark for multiple models on 8 GPUs

@@ -1,0 +1,436 @@
+spreadsheet_id: 1JK1Fev_Lc7ra8Z6OoSQjS07PMSJ1uJ5vudDYLGrTVPc
+metrics:
+- MMMU-Med
+- VQA-RAD
+- SLAKE
+- PathVQA
+- PMC-VQA
+- VQA-Med
+- OmniMedVQA
+- MedXpertQA
+- PubMedQA
+summary:
+  groups:
+  - name: General Baselines
+    models:
+    - name: InternVL3_5-8B
+      params: 8B
+      mmmu_med: 62.0
+      vqa_rad: 58.12
+      slake: 64.18
+      pathvqa: 43.53
+      pmc_vqa: 59.2
+      vqa_med: 24.6
+      omnimedvqa: 89.99
+      medxpertqa: 24.75
+      pubmedqa: 71.8
+      avg: 55.35
+    - name: Qwen3-VL-32B-Instruct
+      params: 32B
+      mmmu_med: 67.33
+      vqa_rad: 59.66
+      slake: 56.02
+      pathvqa: 35.93
+      pmc_vqa: 60.95
+      vqa_med: 20.12
+      omnimedvqa: 78.5
+      medxpertqa: 30.65
+      pubmedqa: 73.2
+      avg: 53.6
+    - name: Qwen3-VL-30B-A3B-Instruct
+      params: 30B(3B)
+      mmmu_med: 66.0
+      vqa_rad: 62.77
+      slake: 53.92
+      pathvqa: 37.2
+      pmc_vqa: 55.05
+      vqa_med: 19.54
+      omnimedvqa: 80.18
+      medxpertqa: 29.55
+      pubmedqa: 77.4
+      avg: 53.51
+    - name: InternVL3-8B
+      params: 8B
+      mmmu_med: 54.67
+      vqa_rad: 57.23
+      slake: 64.23
+      pathvqa: 41.13
+      pmc_vqa: 53.45
+      vqa_med: 19.39
+      omnimedvqa: 78.45
+      medxpertqa: 22.35
+      pubmedqa: 75.0
+      avg: 51.77
+    - name: InternVL2_5-8B
+      params: 8B
+      mmmu_med: 57.33
+      vqa_rad: 55.01
+      slake: 55.68
+      pathvqa: 39.0
+      pmc_vqa: 50.15
+      vqa_med: 22.94
+      omnimedvqa: 83.68
+      medxpertqa: 21.7
+      pubmedqa: 77.2
+      avg: 51.41
+    - name: Qwen3.5-4B
+      params: 4B
+      mmmu_med: 50.0
+      vqa_rad: 61.88
+      slake: 50.19
+      pathvqa: 37.87
+      pmc_vqa: 56.05
+      vqa_med: 18.23
+      omnimedvqa: 75.54
+      medxpertqa: 34.55
+      pubmedqa: 76.2
+      avg: 51.17
+    - name: Qwen3.5-9B
+      params: 9B
+      mmmu_med: 53.33
+      vqa_rad: 61.88
+      slake: 54.68
+      pathvqa: 37.27
+      pmc_vqa: 54.85
+      vqa_med: 20.12
+      omnimedvqa: 54.98
+      medxpertqa: 37.1
+      pubmedqa: 76.2
+      avg: 50.05
+    - name: Qwen3-VL-8B-Instruct
+      params: 8B
+      mmmu_med: 55.33
+      vqa_rad: 56.34
+      slake: 53.53
+      pathvqa: 34.27
+      pmc_vqa: 55.35
+      vqa_med: 16.93
+      omnimedvqa: 76.63
+      medxpertqa: 25.25
+      pubmedqa: 69.8
+      avg: 49.27
+    - name: Qwen3-VL-4B-Instruct
+      params: 4B
+      mmmu_med: 56.67
+      vqa_rad: 51.9
+      slake: 49.86
+      pathvqa: 35.53
+      pmc_vqa: 53.55
+      vqa_med: 15.12
+      omnimedvqa: 77.81
+      medxpertqa: 22.85
+      pubmedqa: 68.2
+      avg: 47.94
+    - name: Qwen2.5-VL-7B-Instruct
+      params: 7B
+      mmmu_med: 54.67
+      vqa_rad: 58.56
+      slake: 48.18
+      pathvqa: 33.93
+      pmc_vqa: 52.9
+      vqa_med: 14.62
+      omnimedvqa: 67.7
+      medxpertqa: 22.3
+      pubmedqa: 76.2
+      avg: 47.67
+    - name: Qwen3.5-2B
+      params: 2B
+      mmmu_med: 44.67
+      vqa_rad: 57.67
+      slake: 44.89
+      pathvqa: 34.73
+      pmc_vqa: 52.35
+      vqa_med: 14.62
+      omnimedvqa: 75.69
+      medxpertqa: 24.55
+      pubmedqa: 73.4
+      avg: 46.95
+    - name: Qwen2.5-VL-3B-Instruct
+      params: 3B
+      mmmu_med: 54.0
+      vqa_rad: 57.23
+      slake: 48.66
+      pathvqa: 32.13
+      pmc_vqa: 53.45
+      vqa_med: 13.53
+      omnimedvqa: 64.89
+      medxpertqa: 20.35
+      pubmedqa: 73.2
+      avg: 46.38
+    - name: Qwen3-VL-2B-Instruct
+      params: 2B
+      mmmu_med: 42.0
+      vqa_rad: 52.11
+      slake: 44.6
+      pathvqa: 33.47
+      pmc_vqa: 49.8
+      vqa_med: 13.31
+      omnimedvqa: 69.23
+      medxpertqa: 20.45
+      pubmedqa: 70.0
+      avg: 43.89
+    - name: Qwen3.5-2B-thinking
+      params: 2B
+      mmmu_med: 42.0
+      vqa_rad: 56.13
+      slake: 47.23
+      pathvqa: 45.67
+      pmc_vqa: 39.55
+      vqa_med: 10.42
+      omnimedvqa: 51.92
+      medxpertqa: 18.6
+      pubmedqa: 45.4
+      avg: 39.66
+  - name: Medical Specialist Baselines
+    models:
+    - name: Lingshu-32B
+      params: 32B
+      mmmu_med: 62.67
+      vqa_rad: 65.65
+      slake: 80.51
+      pathvqa: 61.33
+      pmc_vqa: 64.75
+      vqa_med: 24.02
+      omnimedvqa: 85.06
+      medxpertqa: 28.85
+      pubmedqa: 78.4
+      avg: 61.25
+    - name: Hulu-Med-30A3
+      params: 30B(3B)
+      mmmu_med: 60.67
+      vqa_rad: 70.97
+      slake: 67.91
+      pathvqa: 65.4
+      pmc_vqa: 66.35
+      vqa_med: 18.89
+      omnimedvqa: 84.22
+      medxpertqa: 37.35
+      pubmedqa: 79.4
+      avg: 61.24
+    - name: Lingshu-7B
+      params: 7B
+      mmmu_med: 82.0
+      vqa_rad: 58.78
+      slake: 78.75
+      pathvqa: 57.0
+      pmc_vqa: 62.15
+      vqa_med: 20.62
+      omnimedvqa: 83.23
+      medxpertqa: 26.6
+      pubmedqa: 76.4
+      avg: 60.61
+    - name: Hulu-Med-32B
+      params: 32B
+      mmmu_med: 59.33
+      vqa_rad: 72.74
+      slake: 55.25
+      pathvqa: 62.07
+      pmc_vqa: 66.65
+      vqa_med: 17.87
+      omnimedvqa: 84.37
+      medxpertqa: 33.6
+      pubmedqa: 80.4
+      avg: 59.14
+    - name: Hulu-Med-7B
+      params: 7B
+      mmmu_med: 56.67
+      vqa_rad: 68.75
+      slake: 58.88
+      pathvqa: 63.0
+      pmc_vqa: 62.85
+      vqa_med: 15.77
+      omnimedvqa: 82.94
+      medxpertqa: 27.9
+      pubmedqa: 77.2
+      avg: 57.11
+    - name: Hulu-Med-14B
+      params: 14B
+      mmmu_med: 54.0
+      vqa_rad: 67.42
+      slake: 52.29
+      pathvqa: 61.6
+      pmc_vqa: 64.0
+      vqa_med: 19.1
+      omnimedvqa: 84.02
+      medxpertqa: 29.95
+      pubmedqa: 79.0
+      avg: 56.82
+    - name: Hulu-Med-4B
+      params: 4B
+      mmmu_med: 49.33
+      vqa_rad: 64.54
+      slake: 59.07
+      pathvqa: 58.73
+      pmc_vqa: 58.55
+      vqa_med: 17.29
+      omnimedvqa: 81.21
+      medxpertqa: 27.05
+      pubmedqa: 77.0
+      avg: 54.75
+    - name: Lingshu-I-8B
+      params: 8B
+      mmmu_med: 90.0
+      vqa_rad: 40.99
+      slake: 46.77
+      pathvqa: 46.4
+      pmc_vqa: 65.75
+      vqa_med: 0.0
+      omnimedvqa: 78.21
+      medxpertqa: 27.35
+      pubmedqa: 75.0
+      avg: 52.27
+    - name: HuatuoGPT-Vision-7B
+      params: 7B
+      mmmu_med: 56.0
+      vqa_rad: 57.67
+      slake: 46.61
+      pathvqa: 32.8
+      pmc_vqa: 57.45
+      vqa_med: 15.41
+      omnimedvqa: 78.94
+      medxpertqa: 23.35
+      pubmedqa: 75.8
+      avg: 49.34
+    - name: MedGemma-4b-it
+      params: 4B
+      mmmu_med: 46.67
+      vqa_rad: 65.21
+      slake: 45.22
+      pathvqa: 33.13
+      pmc_vqa: 45.45
+      vqa_med: 12.16
+      omnimedvqa: 70.76
+      medxpertqa: 23.3
+      pubmedqa: 71.6
+      avg: 45.94
+    - name: Med-MoE-StableLM
+      params: 1.6B
+      mmmu_med: 29.33
+      vqa_rad: 66.53
+      slake: 47.28
+      pathvqa: 59.13
+      pmc_vqa: 27.95
+      vqa_med: 11.14
+      omnimedvqa: 31.76
+      medxpertqa: 18.95
+      pubmedqa: 13.6
+      avg: 33.96
+    - name: Med-MoE-Phi
+      params: 2.7B
+      mmmu_med: 36.67
+      vqa_rad: 40.62
+      slake: 21.53
+      pathvqa: 57.4
+      pmc_vqa: 14.45
+      vqa_med: 11.94
+      omnimedvqa: 42.95
+      medxpertqa: 17.4
+      pubmedqa: 0.0
+      avg: 27.0
+    - name: LLaVA-Med-v1.5
+      params: 7B
+      mmmu_med: 31.33
+      vqa_rad: 44.59
+      slake: 20.25
+      pathvqa: 34.07
+      pmc_vqa: 8.05
+      vqa_med: 7.24
+      omnimedvqa: 14.64
+      medxpertqa: 9.8
+      pubmedqa: 18.8
+      avg: 20.97
+  - name: FGMoE Checkpoints
+    models:
+    - name: p0_blend_B1-dense
+      params: ~2B
+      mmmu_med: 43.33
+      vqa_rad: 50.8
+      slake: 50.38
+      pathvqa: 35.93
+      pmc_vqa: 49.55
+      vqa_med: 11.36
+      omnimedvqa: 71.3
+      medxpertqa: 23.15
+      pubmedqa: 72.6
+      avg: 45.38
+      wandb_id: w08niumg
+      description: p0_blend_B1 dense (Phase 0 blend B1)
+    - name: FGMoE-G32-Full
+      params: ~2B
+      mmmu_med: 38.67
+      vqa_rad: 47.91
+      slake: 48.33
+      pathvqa: 43.13
+      pmc_vqa: 41.75
+      vqa_med: 10.42
+      omnimedvqa: 66.86
+      medxpertqa: 18.8
+      pubmedqa: 62.8
+      avg: 42.07
+      wandb_id: reye83pn
+      description: Full-scale G=32 progressive v1 (2M samples, 7812 steps)
+format:
+  frozen_rows: 1
+  frozen_columns: 2
+  header:
+    background:
+      red: 0.216
+      green: 0.255
+      blue: 0.318
+    text_format:
+      bold: true
+      foreground_color:
+        red: 1.0
+        green: 1.0
+        blue: 1.0
+    alignment: CENTER
+  group_header:
+    background:
+      red: 1.0
+      green: 1.0
+      blue: 1.0
+    text_format:
+      bold: true
+      foreground_color:
+        red: 0.0
+        green: 0.0
+        blue: 0.0
+    alignment: LEFT
+  data_cells:
+    alignment: CENTER
+    number_format: '0.00'
+  pubmedqa_column:
+    background:
+      red: 0.937
+      green: 0.937
+      blue: 0.937
+  gradient_rule:
+    columns_with_gradient:
+    - 2
+    - 3
+    - 4
+    - 5
+    - 6
+    - 7
+    - 8
+    - 9
+    - 11
+    minpoint:
+      type: MIN
+      color:
+        red: 1.0
+        green: 1.0
+        blue: 1.0
+    midpoint:
+      type: PERCENTILE
+      value: '50'
+      color:
+        red: 0.863
+        green: 0.984
+        blue: 0.906
+    maxpoint:
+      type: MAX
+      color:
+        red: 0.082
+        green: 0.635
+        blue: 0.286

@@ -65,15 +65,17 @@ def path_vqa_mini_open_process_results(
     }
 
     if is_judge_enabled():
-        judge_score = judge_binary(
+        judge_result = judge_binary(
             question=doc["question"],
             answer=doc["answer"],
             prediction=pred_ans,
         )
-        metrics["llm_judge"] = judge_score
+        metrics["llm_judge"] = judge_result["score"]
+        metrics["judge_model"] = judge_result["judge_model"]
+        metrics["judge_raw_response"] = judge_result["judge_raw_response"]
         # Mirror as accuracy so open+closed can be aggregated
         # at group level
-        metrics["accuracy"] = judge_score
+        metrics["accuracy"] = judge_result["score"]
 
     return metrics
 

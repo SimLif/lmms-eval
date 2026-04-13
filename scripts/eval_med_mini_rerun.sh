@@ -1,4 +1,6 @@
 #!/bin/bash
+# DEPRECATED: Use run_eval.py instead:
+#   uv run python scripts/run_eval.py -c scripts/configs/med_eval_mini.yaml --skip-if-done --batch-size 1
 set -euo pipefail
 
 # Re-run only the 8 failed models for med_eval_mini

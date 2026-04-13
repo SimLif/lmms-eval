@@ -1,4 +1,6 @@
 #!/bin/bash
+# DEPRECATED: Use run_eval.py instead:
+#   uv run python scripts/run_eval.py -c scripts/configs/med_eval_mini.yaml --tags baseline --parallel
 set -euo pipefail
 
 # Med-eval-mini benchmark for 5 medical baseline models
