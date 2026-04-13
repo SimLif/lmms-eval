@@ -23,7 +23,11 @@ Recover lost evaluation infrastructure after machine crash. Build a decoupled ev
 
 9. **Google Sheets MCP**: Configured service account + mcp-gsheets with proxy.
 
-10. **Cluster SSH**: 4 nodes verified accessible via port 56683 with id_rsa key.
+10. **Cluster SSH**: 4 nodes verified accessible via port 56683 with id_rsa key. s2 (10.51.202.85) confirmed idle (8x B-card, no active GPU processes).
+
+11. **Git push**: 2 commits pushed to origin/main via SSH (remote set to git@github.com:SimLif/lmms-eval.git with proxy).
+
+12. **Memory bank**: Initialized `memory/` with work-in-progress.md + session-01.md. Added to git (removed `memory/` from .gitignore, kept `memory/plan.md` ignored).
 
 ## Key Findings
 
@@ -36,5 +40,6 @@ Recover lost evaluation infrastructure after machine crash. Build a decoupled ev
 
 1. Implement auto batch size detection (OOM retry with chunk halving)
 2. Run full med_eval_mini on remaining 18 models
-3. Explore multi-node evaluation across 4 cluster nodes
+3. Explore multi-node evaluation across 4 cluster nodes (s0-s3, port 56683)
 4. Fine-tune upload format (red bold cell count, column-max vs group-max)
+5. Consider using s2 (idle) for parallel model evaluation or judge server

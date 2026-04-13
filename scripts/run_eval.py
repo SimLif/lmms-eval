@@ -41,7 +41,7 @@ class Defaults:
     task: str = "med_eval_mini"
     num_gpus: int = 8
     accelerate_port: int = 12346
-    batch_size: int = 32
+    batch_size: int | str = 32
     output_dir: str = "logs/med_eval_mini"
     vllm_tp: int = 8
     vllm_gpu_util: float = 0.80
@@ -59,7 +59,7 @@ class ModelConfig:
     pretrained: str
     launch: str  # "multi" | "single" | "vllm"
     transformers_version: str | None = None
-    batch_size: int | None = None
+    batch_size: int | str | None = None
     max_pixels: int | None = None
     min_pixels: int | None = None
     attn_implementation: str | None = None
@@ -84,7 +84,7 @@ class ResolvedModel:
     task: str
     num_gpus: int
     accelerate_port: int
-    batch_size: int
+    batch_size: int | str
     output_dir: str
     vllm_tp: int
     vllm_gpu_util: float
@@ -652,8 +652,8 @@ def parse_args() -> argparse.Namespace:
         help="Override the task from config",
     )
     p.add_argument(
-        "--batch-size", type=int, default=None,
-        help="Override batch_size for all models",
+        "--batch-size", type=str, default=None,
+        help="Override batch_size for all models (int or 'auto' or 'auto:N')",
     )
     p.add_argument(
         "--output-dir",
