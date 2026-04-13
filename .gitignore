@@ -57,5 +57,5 @@ remote_code/*
 docs/plans/
 .opencode
 .worktrees/
-memory/
+memory/plan.md
 MEDICAL_EVAL_PROGRESS.md
