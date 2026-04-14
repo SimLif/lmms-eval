@@ -248,11 +248,10 @@ models:
 
   - name: Lingshu-I-8B
     params: 8B
-    model_type: internvl2
+    model_type: internvl_hf
     pretrained: lingshu-medical-mllm/Lingshu-I-8B
     launch: multi
     batch_size: 1
-    transformers_version: "4.49.0"
     tags: [lingshu]
 
   # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

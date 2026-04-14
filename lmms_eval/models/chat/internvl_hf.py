@@ -277,6 +277,8 @@ class InternVLHf(lmms):
 
             if len(videos) == 0:
                 videos = None
+            if len(visuals) == 0:
+                visuals = None
             inputs = self.processor(
                 images=visuals,
                 videos=videos,
@@ -290,7 +292,7 @@ class InternVLHf(lmms):
             # this is safe to assume because the `grouper` object ensures it.
             gen_kwargs = all_gen_kwargs[0]
 
-            gen_kwargs["image_sizes"] = [visuals[idx].size for idx in range(len(visuals))]
+            gen_kwargs["image_sizes"] = [visuals[idx].size for idx in range(len(visuals))] if visuals else []
             if "max_new_tokens" not in gen_kwargs:
                 gen_kwargs["max_new_tokens"] = 1024
             if "temperature" not in gen_kwargs:

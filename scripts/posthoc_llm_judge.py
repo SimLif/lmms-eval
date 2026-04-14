@@ -182,7 +182,8 @@ def run_judge_on_task(
         question = sample.get("input", "")
         target = sample.get("target", "")
         pred = sample.get("filtered_resps", "")
-        if isinstance(pred, list):
+        # Flatten nested lists (e.g. chat models store [['answer']] not ['answer'])
+        while isinstance(pred, list):
             pred = pred[0] if pred else ""
 
         pred_clean = parse_reasoning_answer(pred, strict=False)

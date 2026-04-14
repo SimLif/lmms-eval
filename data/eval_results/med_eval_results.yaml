@@ -269,16 +269,16 @@ summary:
       avg: 55.4
     - name: Lingshu-I-8B
       params: 8B
-      mmmu_med: 90.0
-      vqa_rad: 40.99
-      slake: 46.77
-      pathvqa: 46.4
-      pmc_vqa: 65.75
-      vqa_med: 0.0
-      omnimedvqa: 78.21
-      medxpertqa: 27.35
+      mmmu_med: 90.67
+      vqa_rad: 63.19
+      slake: 90.02
+      pathvqa: 67.4
+      pmc_vqa: 64.75
+      vqa_med: 24.67
+      omnimedvqa: 78.06
+      medxpertqa: 27.4
       pubmedqa: 75.0
-      avg: 52.27
+      avg: 64.57
     - name: HuatuoGPT-Vision-7B
       params: 7B
       mmmu_med: 56.0

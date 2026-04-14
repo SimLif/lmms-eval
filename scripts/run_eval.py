@@ -311,6 +311,19 @@ def ensure_transformers_version(
 
     cmd = ["uv", "pip", "install", "--no-deps"] + packages
     subprocess.run(cmd, check=True, capture_output=True)
+
+    # Clear .pyc cache to prevent bytecode from a prior version leaking in
+    tf_site = subprocess.run(
+        [".venv/bin/python", "-c",
+         "import transformers, pathlib; print(pathlib.Path(transformers.__file__).parent)"],
+        capture_output=True, text=True,
+    ).stdout.strip()
+    if tf_site:
+        subprocess.run(
+            ["find", tf_site, "-name", "*.pyc", "-delete"],
+            capture_output=True,
+        )
+
     _current_tf_version = want
 
 
