@@ -35,6 +35,7 @@ AVAILABLE_SIMPLE_MODELS = {
     "gpt4o_audio": "GPT4OAudio",
     "gemma3": "Gemma3",
     "gpt4v": "GPT4V",
+    "fgmoe_qwen3_vl": "FGMoEQwen3VL",
     "idefics2": "Idefics2",
     "instructblip": "InstructBLIP",
     "internvideo2_5": "InternVideo2_5",

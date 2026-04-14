@@ -298,3 +298,16 @@ models:
     launch: multi
     batch_size: 1
     tags: [hulumed]
+
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  #  FGMoE Checkpoints
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  - name: FGMoE-v13-pilot300
+    model_type: fgmoe_qwen3_vl
+    pretrained: /root/paddlejob/workspace/env_run/hqguo/checkpoints/FGMoE-v13-pilot300
+    launch: multi
+    params: "~2B"
+    max_pixels: 1003520
+    min_pixels: 200704
+    attn_implementation: sdpa
+    tags: [fgmoe]

@@ -194,7 +194,12 @@ class Qwen2_5_VL(lmms):
         contexts, all_gen_kwargs, doc_to_visual, doc_id, task, split = zip(*chunk)
         task = task[0]
         split = split[0]
-        visual_list = [doc_to_visual[0](self.task_dict[task][split][ids]) for ids in doc_id]
+        visual_list = []
+        for ids in doc_id:
+            try:
+                visual_list.append(doc_to_visual[0](self.task_dict[task][split][ids]))
+            except (IndexError, KeyError):
+                visual_list.append(None)
         gen_kwargs = all_gen_kwargs[0]
 
         until = gen_kwargs.get("until", [self.tokenizer.decode(self.eot_token_id)])

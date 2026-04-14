@@ -198,7 +198,14 @@ class Qwen3_VL(lmms):
         contexts, all_gen_kwargs, doc_to_visual, doc_id, task, split = zip(*chunk)
         task = task[0]
         split = split[0]
-        visual_list = [doc_to_visual[0](self.task_dict[task][split][ids]) for ids in doc_id]
+        # In multi-GPU mode the dataset is padded to be divisible by num_processes.
+        # Padded samples have doc_ids beyond the dataset size → catch IndexError/KeyError.
+        visual_list = []
+        for ids in doc_id:
+            try:
+                visual_list.append(doc_to_visual[0](self.task_dict[task][split][ids]))
+            except (IndexError, KeyError):
+                visual_list.append(None)
         gen_kwargs = all_gen_kwargs[0]
 
         until = gen_kwargs.get("until", [self.tokenizer.decode(self.eot_token_id)])
