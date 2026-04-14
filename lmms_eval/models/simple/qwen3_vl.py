@@ -9,6 +9,7 @@ from loguru import logger as eval_logger
 from PIL import Image
 from tqdm import tqdm
 from transformers import (
+    AutoConfig,
     AutoProcessor,
     AutoTokenizer,
     Qwen3VLForConditionalGeneration,
@@ -95,9 +96,10 @@ class Qwen3_VL(lmms):
         if attn_implementation is not None:
             model_kwargs["attn_implementation"] = attn_implementation
 
-        # check whether its an MoE model
-        match = re.search(r"A\d+B", pretrained)
-        model_fn = Qwen3VLMoeForConditionalGeneration if match else Qwen3VLForConditionalGeneration
+        # Detect MoE variant from config (more robust than name pattern)
+        _cfg = AutoConfig.from_pretrained(pretrained)
+        is_moe = "moe" in getattr(_cfg, "model_type", "")
+        model_fn = Qwen3VLMoeForConditionalGeneration if is_moe else Qwen3VLForConditionalGeneration
         self._model = model_fn.from_pretrained(pretrained, **model_kwargs).eval()
         self.pretrained = pretrained
         self.max_pixels = max_pixels

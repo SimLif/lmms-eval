@@ -185,88 +185,88 @@ summary:
     models:
     - name: Lingshu-32B
       params: 32B
-      mmmu_med: 62.67
-      vqa_rad: 65.65
-      slake: 80.51
-      pathvqa: 61.33
-      pmc_vqa: 64.75
-      vqa_med: 24.02
-      omnimedvqa: 85.06
-      medxpertqa: 28.85
-      pubmedqa: 78.4
-      avg: 61.25
+      mmmu_med: 63.33
+      vqa_rad: 65.63
+      slake: 83.43
+      pathvqa: 60.93
+      pmc_vqa: 64.45
+      vqa_med: 23.73
+      omnimedvqa: 85.36
+      medxpertqa: 29.05
+      pubmedqa: 78.2
+      avg: 61.57
     - name: Hulu-Med-30A3
       params: 30B(3B)
-      mmmu_med: 60.67
-      vqa_rad: 70.97
-      slake: 67.91
-      pathvqa: 65.4
-      pmc_vqa: 66.35
-      vqa_med: 18.89
-      omnimedvqa: 84.22
-      medxpertqa: 37.35
-      pubmedqa: 79.4
-      avg: 61.24
+      mmmu_med: 61.33
+      vqa_rad: 72.06
+      slake: 67.77
+      pathvqa: 65.53
+      pmc_vqa: 66.3
+      vqa_med: 19.03
+      omnimedvqa: 84.07
+      medxpertqa: 37.2
+      pubmedqa: 79.6
+      avg: 61.43
     - name: Lingshu-7B
       params: 7B
       mmmu_med: 82.0
-      vqa_rad: 58.78
-      slake: 78.75
+      vqa_rad: 58.09
+      slake: 78.18
       pathvqa: 57.0
-      pmc_vqa: 62.15
-      vqa_med: 20.62
-      omnimedvqa: 83.23
-      medxpertqa: 26.6
+      pmc_vqa: 62.65
+      vqa_med: 20.69
+      omnimedvqa: 82.99
+      medxpertqa: 26.8
       pubmedqa: 76.4
-      avg: 60.61
+      avg: 60.53
     - name: Hulu-Med-32B
       params: 32B
       mmmu_med: 59.33
-      vqa_rad: 72.74
-      slake: 55.25
-      pathvqa: 62.07
-      pmc_vqa: 66.65
-      vqa_med: 17.87
-      omnimedvqa: 84.37
-      medxpertqa: 33.6
-      pubmedqa: 80.4
-      avg: 59.14
+      vqa_rad: 72.28
+      slake: 56.97
+      pathvqa: 62.33
+      pmc_vqa: 66.8
+      vqa_med: 18.09
+      omnimedvqa: 84.07
+      medxpertqa: 33.4
+      pubmedqa: 80.0
+      avg: 59.25
     - name: Hulu-Med-7B
       params: 7B
-      mmmu_med: 56.67
-      vqa_rad: 68.75
-      slake: 58.88
-      pathvqa: 63.0
-      pmc_vqa: 62.85
+      mmmu_med: 56.0
+      vqa_rad: 68.29
+      slake: 59.5
+      pathvqa: 62.53
+      pmc_vqa: 63.15
       vqa_med: 15.77
-      omnimedvqa: 82.94
-      medxpertqa: 27.9
-      pubmedqa: 77.2
-      avg: 57.11
+      omnimedvqa: 83.58
+      medxpertqa: 28.35
+      pubmedqa: 78.0
+      avg: 57.24
     - name: Hulu-Med-14B
       params: 14B
       mmmu_med: 54.0
-      vqa_rad: 67.42
-      slake: 52.29
-      pathvqa: 61.6
-      pmc_vqa: 64.0
-      vqa_med: 19.1
-      omnimedvqa: 84.02
-      medxpertqa: 29.95
-      pubmedqa: 79.0
-      avg: 56.82
+      vqa_rad: 67.63
+      slake: 52.63
+      pathvqa: 61.87
+      pmc_vqa: 63.9
+      vqa_med: 19.03
+      omnimedvqa: 84.66
+      medxpertqa: 29.6
+      pubmedqa: 79.2
+      avg: 56.95
     - name: Hulu-Med-4B
       params: 4B
-      mmmu_med: 49.33
-      vqa_rad: 64.54
-      slake: 59.07
-      pathvqa: 58.73
-      pmc_vqa: 58.55
-      vqa_med: 17.29
-      omnimedvqa: 81.21
-      medxpertqa: 27.05
-      pubmedqa: 77.0
-      avg: 54.75
+      mmmu_med: 52.67
+      vqa_rad: 64.75
+      slake: 60.17
+      pathvqa: 58.33
+      pmc_vqa: 58.5
+      vqa_med: 17.08
+      omnimedvqa: 82.05
+      medxpertqa: 26.25
+      pubmedqa: 78.8
+      avg: 55.4
     - name: Lingshu-I-8B
       params: 8B
       mmmu_med: 90.0

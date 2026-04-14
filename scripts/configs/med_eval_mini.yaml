@@ -222,3 +222,80 @@ models:
     gpu: 4
     batch_size: 1
     tags: [baseline]
+
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  #  Lingshu  (Medical fine-tuned models)
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  - name: Lingshu-7B
+    params: 7B
+    model_type: qwen2_5_vl
+    pretrained: lingshu-medical-mllm/Lingshu-7B
+    launch: multi
+    max_pixels: 3211264
+    min_pixels: 200704
+    attn_implementation: sdpa
+    tags: [lingshu]
+
+  - name: Lingshu-32B
+    params: 32B
+    model_type: qwen2_5_vl
+    pretrained: lingshu-medical-mllm/Lingshu-32B
+    launch: single
+    max_pixels: 3211264
+    min_pixels: 200704
+    attn_implementation: sdpa
+    tags: [lingshu]
+
+  - name: Lingshu-I-8B
+    params: 8B
+    model_type: internvl2
+    pretrained: lingshu-medical-mllm/Lingshu-I-8B
+    launch: multi
+    batch_size: 1
+    transformers_version: "4.49.0"
+    tags: [lingshu]
+
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  #  Hulu-Med  (ZJU-AI4H medical models)
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  - name: Hulu-Med-30A3
+    params: "30B(3B)"
+    model_type: qwen3_vl
+    pretrained: ZJU-AI4H/Hulu-Med-30A3
+    launch: single
+    max_pixels: 3211264
+    min_pixels: 200704
+    attn_implementation: sdpa
+    tags: [hulumed]
+
+  - name: Hulu-Med-4B
+    params: 4B
+    model_type: hulumed
+    pretrained: ZJU-AI4H/Hulu-Med-4B
+    launch: multi
+    batch_size: 1
+    tags: [hulumed]
+
+  - name: Hulu-Med-7B
+    params: 7B
+    model_type: hulumed
+    pretrained: ZJU-AI4H/Hulu-Med-7B
+    launch: multi
+    batch_size: 1
+    tags: [hulumed]
+
+  - name: Hulu-Med-14B
+    params: 14B
+    model_type: hulumed
+    pretrained: ZJU-AI4H/Hulu-Med-14B
+    launch: multi
+    batch_size: 1
+    tags: [hulumed]
+
+  - name: Hulu-Med-32B
+    params: 32B
+    model_type: hulumed
+    pretrained: ZJU-AI4H/Hulu-Med-32B
+    launch: multi
+    batch_size: 1
+    tags: [hulumed]
