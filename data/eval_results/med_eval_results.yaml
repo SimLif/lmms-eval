@@ -369,6 +369,20 @@ summary:
       avg: 42.07
       wandb_id: reye83pn
       description: Full-scale G=32 progressive v1 (2M samples, 7812 steps)
+  - name: New Results
+    models:
+    - name: FGMoE-v13-pilot300
+      params: ~2B
+      mmmu_med: 42.0
+      vqa_rad: 45.45
+      slake: 39.59
+      pathvqa: 35.6
+      pmc_vqa: 47.05
+      vqa_med: 12.01
+      omnimedvqa: 73.03
+      medxpertqa: 22.25
+      pubmedqa: 69.0
+      avg: 42.89
 format:
   frozen_rows: 1
   frozen_columns: 2

@@ -1,27 +1,30 @@
 """Pipeline: eval → judge → parse → upload.
 
-Orchestrates the full evaluation pipeline for a single model:
-1. Run evaluation (run_eval.py)
-2. Run LLM judge on open-ended tasks (posthoc_llm_judge.py)
-3. Parse results and update local YAML
-4. Upload to Google Sheet (optional)
+Orchestrates medical VLM evaluation in separable phases:
+
+  Remote (training machine):
+    eval + judge → produces logs with results.json + judged samples
+
+  Local (aggregation machine):
+    parse  → reads logs, updates med_eval_results.yaml
+    preview → shows formatted table (judge-missing metrics shown as "-")
+    upload → pushes YAML to Google Sheet
 
 Usage:
-    # Full pipeline (eval + judge + parse, no upload)
-    .venv/bin/python scripts/pipeline.py -c scripts/configs/med_eval_mini.yaml \
-        --models Qwen3-VL-2B-Instruct
+    # Remote: eval + judge (no parse, no upload)
+    pipeline.py -c configs/med_eval_mini.yaml --models X --no-parse
 
-    # Skip eval, only judge + parse existing results
-    .venv/bin/python scripts/pipeline.py -c scripts/configs/med_eval_mini.yaml \
-        --models Qwen3-VL-2B-Instruct --skip-eval
+    # Remote: eval only (no judge, no parse)
+    pipeline.py -c configs/med_eval_mini.yaml --models X --no-judge --no-parse
 
-    # No judge, parse with "-" for judge metrics
-    .venv/bin/python scripts/pipeline.py -c scripts/configs/med_eval_mini.yaml \
-        --models Qwen3-VL-2B-Instruct --no-judge
+    # Local: parse from existing logs
+    pipeline.py -c configs/med_eval_mini.yaml --models X --parse-only
 
-    # Full pipeline + upload
-    .venv/bin/python scripts/pipeline.py -c scripts/configs/med_eval_mini.yaml \
-        --models Qwen3-VL-2B-Instruct --upload
+    # Local: parse + preview table
+    pipeline.py -c configs/med_eval_mini.yaml --models X --parse-only --preview
+
+    # Local: parse + upload to Google Sheet
+    pipeline.py -c configs/med_eval_mini.yaml --models X --parse-only --upload
 """
 
 from __future__ import annotations
@@ -69,6 +72,8 @@ GROUPS_REQUIRING_JUDGE = {
 
 DEFAULT_YAML = "data/eval_results/med_eval_results.yaml"
 DEFAULT_GROUP = "New Results"
+
+METRIC_FIELDS = [r[2] for r in RESULT_TO_YAML]  # ordered yaml field names
 
 
 # ---------------------------------------------------------------------------
@@ -240,7 +245,6 @@ def update_yaml(
     for group in data["summary"]["groups"]:
         for model in group["models"]:
             if model["name"] == model_name:
-                # Update metrics in place
                 model.update(metrics)
                 model["params"] = params
                 found = True
@@ -250,7 +254,6 @@ def update_yaml(
             break
 
     if not found:
-        # Append to specified group or default
         target_group_name = yaml_group or DEFAULT_GROUP
         target_group = None
         for group in data["summary"]["groups"]:
@@ -259,7 +262,6 @@ def update_yaml(
                 break
 
         if target_group is None:
-            # Create the group
             target_group = {"name": target_group_name, "models": []}
             data["summary"]["groups"].append(target_group)
             log.info("  Created new group: '%s'", target_group_name)
@@ -273,6 +275,64 @@ def update_yaml(
         yaml.dump(data, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
 
     log.info("  YAML saved: %s", yaml_path)
+
+
+# ---------------------------------------------------------------------------
+# Preview
+# ---------------------------------------------------------------------------
+
+
+def preview_results(yaml_path: str, model_names: list[str]) -> None:
+    """Print a formatted table of results for the given models."""
+    with open(yaml_path) as f:
+        data = yaml.safe_load(f)
+
+    models = {}
+    for group in data["summary"]["groups"]:
+        for m in group["models"]:
+            if m["name"] in model_names:
+                models[m["name"]] = m
+
+    if not models:
+        log.warning("No matching models found in %s", yaml_path)
+        return
+
+    headers = ["Model", "Params"] + [r[2] for r in RESULT_TO_YAML] + ["Avg"]
+    col_widths = [max(len(h), 12) for h in headers]
+    col_widths[0] = max(col_widths[0], max(len(n) for n in models) + 2)
+
+    def fmt_val(v):
+        if isinstance(v, (int, float)):
+            return f"{v:.2f}"
+        return str(v)
+
+    # Header
+    header_line = "  ".join(h.center(w) for h, w in zip(headers, col_widths))
+    print()
+    print(header_line)
+    print("─" * len(header_line))
+
+    # Data rows
+    has_missing = False
+    for name in model_names:
+        m = models.get(name)
+        if m is None:
+            print(f"  {name}: NOT FOUND")
+            continue
+        vals = [name, str(m.get("params", "?"))]
+        for field in METRIC_FIELDS:
+            v = m.get(field, "-")
+            if v == "-":
+                has_missing = True
+            vals.append(fmt_val(v))
+        vals.append(fmt_val(m.get("avg", "-")))
+        row = "  ".join(v.center(w) for v, w in zip(vals, col_widths))
+        print(row)
+
+    print()
+    if has_missing:
+        log.warning("Some metrics show '-' — LLM judge may not have been run.")
+        log.warning("Run eval+judge on the remote machine, sync logs, then re-parse.")
 
 
 # ---------------------------------------------------------------------------
@@ -296,104 +356,151 @@ def run_upload(yaml_path: str, dry_run: bool) -> bool:
 
 
 def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Eval pipeline: eval → judge → parse → upload")
+    p = argparse.ArgumentParser(
+        description="Eval pipeline: eval → judge → parse → upload",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Workflow:
+  Remote:  pipeline.py -c CFG --models X --no-parse      # eval + judge
+  Local:   pipeline.py -c CFG --models X --parse-only     # parse logs
+  Local:   pipeline.py -c CFG --models X --parse-only --preview  # parse + table
+  Local:   pipeline.py -c CFG --models X --parse-only --upload   # parse + sheet
+""",
+    )
     p.add_argument("-c", "--config", required=True, help="Eval config YAML")
-    p.add_argument("--models", required=True, help="Model name (from eval config)")
-    p.add_argument("--no-judge", action="store_true", help="Skip LLM judge (default: judge ON)")
-    p.add_argument("--upload", action="store_true", help="Upload to Google Sheet (default: OFF)")
-    p.add_argument("--skip-eval", action="store_true", help="Skip eval, use existing results")
-    p.add_argument("--limit", type=int, default=None, help="Pass --limit to eval")
-    p.add_argument("--batch-size", type=int, default=None, help="Override batch size")
-    p.add_argument("--dry-run", action="store_true", help="Dry run all phases")
+    p.add_argument("--models", required=True, help="Comma-separated model names")
+
+    # Phase control
+    phase = p.add_argument_group("phase control")
+    phase.add_argument("--no-judge", action="store_true", help="Skip LLM judge")
+    phase.add_argument("--no-parse", action="store_true",
+                       help="Stop after eval+judge (no parse/upload)")
+    phase.add_argument("--parse-only", action="store_true",
+                       help="Skip eval+judge, only parse existing logs")
+    phase.add_argument("--skip-eval", action="store_true",
+                       help="Skip eval, re-run judge on existing results")
+    phase.add_argument("--preview", action="store_true",
+                       help="Print formatted results table after parse")
+    phase.add_argument("--upload", action="store_true",
+                       help="Upload to Google Sheet after parse")
+
+    # Eval options
+    ev = p.add_argument_group("eval options")
+    ev.add_argument("--limit", type=int, default=None, help="Limit samples per task")
+    ev.add_argument("--batch-size", type=int, default=None, help="Override batch size")
+    ev.add_argument("--dry-run", action="store_true", help="Dry run all phases")
+
     # Judge options
-    p.add_argument("--judge-model", default="Qwen/Qwen3-VL-32B-Instruct")
-    p.add_argument("--serve-gpu-ids", default="0,1,2,3")
-    p.add_argument("--serve-port", type=int, default=8000)
-    p.add_argument("--judge-workers", type=int, default=16)
-    # YAML options
-    p.add_argument("--yaml-path", default=DEFAULT_YAML, help="Results YAML file")
-    p.add_argument("--yaml-group", default=None, help="Group for new models (default: 'New Results')")
-    return p.parse_args()
+    jg = p.add_argument_group("judge options")
+    jg.add_argument("--judge-model", default="Qwen/Qwen3-VL-32B-Instruct")
+    jg.add_argument("--serve-gpu-ids", default="0,1,2,3")
+    jg.add_argument("--serve-port", type=int, default=8000)
+    jg.add_argument("--judge-workers", type=int, default=16)
+
+    # YAML / output options
+    yo = p.add_argument_group("output options")
+    yo.add_argument("--yaml-path", default=DEFAULT_YAML,
+                    help="Results YAML file (default: %(default)s)")
+    yo.add_argument("--yaml-group", default=None,
+                    help="Group name for new models (default: 'New Results')")
+
+    args = p.parse_args()
+
+    # Validation
+    if args.parse_only and args.no_parse:
+        p.error("--parse-only and --no-parse are mutually exclusive")
+    if args.upload and args.no_parse:
+        p.error("--upload requires parse (incompatible with --no-parse)")
+    if args.preview and args.no_parse:
+        p.error("--preview requires parse (incompatible with --no-parse)")
+
+    return args
 
 
 def main():
     args = parse_args()
     config = load_eval_config(args.config)
-    model_name = args.models
+    model_names = [n.strip() for n in args.models.split(",")]
     output_dir = config.get("defaults", {}).get("output_dir", "logs/med_eval_mini")
 
-    # Find model in config for params
-    model_config = find_model_in_config(config, model_name)
-    if model_config is None:
-        log.error("Model '%s' not found in config %s", model_name, args.config)
-        sys.exit(1)
-
-    params = model_config.get("params", "?")
-
-    log.info("=" * 60)
-    log.info("Pipeline: %s (params=%s)", model_name, params)
-    log.info("  judge=%s upload=%s", not args.no_judge, args.upload)
-    log.info("=" * 60)
-
-    # Phase 1: Eval
-    if not args.skip_eval:
-        ok = run_eval(args.config, model_name, args.batch_size, args.limit, args.dry_run)
-        if not ok:
-            log.error("Eval failed for %s", model_name)
+    for model_name in model_names:
+        model_config = find_model_in_config(config, model_name)
+        if model_config is None:
+            log.error("Model '%s' not found in config %s", model_name, args.config)
             sys.exit(1)
-    else:
-        log.info("Phase 1: EVAL — skipped (--skip-eval)")
 
-    # Find results dir
-    if not args.dry_run:
-        try:
-            results_dir = find_results_dir(output_dir, model_name)
-            log.info("Results dir: %s", results_dir)
-        except FileNotFoundError as e:
-            log.error(str(e))
-            sys.exit(1)
-    else:
-        results_dir = f"{output_dir}/{model_name}/????"
+        params = model_config.get("params", "?")
 
-    # Phase 2: Judge
-    judge_ok = True
-    if not args.no_judge:
-        try:
-            judge_ok = run_judge(
-                results_dir,
-                args.judge_model,
-                args.serve_gpu_ids,
-                str(args.serve_port),
-                args.judge_workers,
-                args.dry_run,
-            )
-            if not judge_ok:
-                log.warning("Judge failed — continuing with '-' for judge metrics")
-        except Exception as e:
-            log.warning("Judge error: %s — continuing with '-' for judge metrics", e)
-            judge_ok = False
-    else:
-        log.info("Phase 2: JUDGE — skipped (--no-judge)")
+        log.info("=" * 60)
+        log.info("Pipeline: %s (params=%s)", model_name, params)
+        log.info("  judge=%s parse=%s upload=%s",
+                 not args.no_judge and not args.parse_only,
+                 not args.no_parse,
+                 args.upload)
+        log.info("=" * 60)
 
-    # Phase 3: Parse
-    log.info("Phase 3: PARSE — %s", model_name)
-    if not args.dry_run:
-        metrics = parse_results(results_dir)
-        log.info("  Metrics: %s", {k: v for k, v in metrics.items() if k != "avg"})
-        log.info("  Avg: %s", metrics["avg"])
+        # Phase 1: Eval
+        if not args.skip_eval and not args.parse_only:
+            ok = run_eval(args.config, model_name, args.batch_size, args.limit, args.dry_run)
+            if not ok:
+                log.error("Eval failed for %s", model_name)
+                sys.exit(1)
+        else:
+            log.info("Phase 1: EVAL — skipped")
 
-        update_yaml(args.yaml_path, model_name, params, metrics, args.yaml_group)
-    else:
-        log.info("  [DRY-RUN] Would parse %s and update %s", results_dir, args.yaml_path)
+        # Find results dir (needed for judge and/or parse)
+        if not args.dry_run:
+            try:
+                results_dir = find_results_dir(output_dir, model_name)
+                log.info("Results dir: %s", results_dir)
+            except FileNotFoundError as e:
+                log.error(str(e))
+                sys.exit(1)
+        else:
+            results_dir = f"{output_dir}/{model_name}/????"
 
-    # Phase 4: Upload
+        # Phase 2: Judge
+        if not args.no_judge and not args.parse_only:
+            try:
+                judge_ok = run_judge(
+                    results_dir,
+                    args.judge_model,
+                    args.serve_gpu_ids,
+                    str(args.serve_port),
+                    args.judge_workers,
+                    args.dry_run,
+                )
+                if not judge_ok:
+                    log.warning("Judge failed — continuing with '-' for judge metrics")
+            except Exception as e:
+                log.warning("Judge error: %s — continuing with '-'", e)
+        else:
+            log.info("Phase 2: JUDGE — skipped")
+
+        # Phase 3: Parse
+        if not args.no_parse:
+            log.info("Phase 3: PARSE — %s", model_name)
+            if not args.dry_run:
+                metrics = parse_results(results_dir)
+                log.info("  Metrics: %s", metrics)
+                update_yaml(args.yaml_path, model_name, params, metrics, args.yaml_group)
+            else:
+                log.info("  [DRY-RUN] Would parse and update %s", args.yaml_path)
+        else:
+            log.info("Phase 3: PARSE — skipped (--no-parse)")
+
+    # Preview (after all models parsed)
+    if args.preview and not args.no_parse:
+        preview_results(args.yaml_path, model_names)
+
+    # Phase 4: Upload (once, after all models)
     if args.upload:
         run_upload(args.yaml_path, args.dry_run)
     else:
-        log.info("Phase 4: UPLOAD — skipped (use --upload to enable)")
+        log.info("Phase 4: UPLOAD — skipped")
 
     log.info("=" * 60)
-    log.info("Pipeline complete: %s", model_name)
+    log.info("Pipeline complete: %s", ", ".join(model_names))
     log.info("=" * 60)
 
 

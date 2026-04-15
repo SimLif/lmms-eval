@@ -1,32 +1,42 @@
 # Med-Eval Handbook
 
-Medical VLM evaluation pipeline: eval → LLM judge → results YAML → Google Sheet.
+Medical VLM evaluation pipeline: eval → LLM judge → parse → upload.
+
+## Workflow
+
+```
+Training Machine (remote)           Local Machine
+┌─────────────────────────┐         ┌─────────────────────────┐
+│ 1. eval + judge         │  rsync  │ 3. parse                │
+│    --no-parse           │ ──────► │    --parse-only          │
+│                         │  logs/  │ 4. preview               │
+│ 2. repeat for each      │         │    --parse-only --preview│
+│    model / machine      │         │ 5. upload                │
+│                         │         │    --parse-only --upload  │
+└─────────────────────────┘         └─────────────────────────┘
+```
 
 ## Quick Start
 
 ```bash
-# 1. Setup environment (first time or after GPU change)
-bash scripts/rebuild_env.sh
+# Remote: eval + judge (no parse, no upload)
+pipeline.py -c scripts/configs/med_eval_mini.yaml \
+    --models Qwen3-VL-2B-Instruct --no-parse
 
-# 2. Evaluate a single model (judge enabled by default)
-.venv/bin/python scripts/pipeline.py -c scripts/configs/med_eval_mini.yaml \
-    --models Qwen3-VL-2B-Instruct
+# Remote: eval only (faster, judge-dependent metrics will show "-")
+pipeline.py -c scripts/configs/med_eval_mini.yaml \
+    --models Qwen3-VL-2B-Instruct --no-judge --no-parse
 
-# 3. Evaluate without judge (faster, judge-dependent metrics show "-")
-.venv/bin/python scripts/pipeline.py -c scripts/configs/med_eval_mini.yaml \
-    --models Qwen3-VL-2B-Instruct --no-judge
+# Sync logs to local
+rsync -az remote:project/logs/med_eval_mini/ logs/med_eval_mini/
 
-# 4. Evaluate + upload to Google Sheet
-.venv/bin/python scripts/pipeline.py -c scripts/configs/med_eval_mini.yaml \
-    --models Qwen3-VL-2B-Instruct --upload
+# Local: parse + preview
+pipeline.py -c scripts/configs/med_eval_mini.yaml \
+    --models Qwen3-VL-2B-Instruct --parse-only --preview
 
-# 5. Re-run judge on existing results (skip eval)
-.venv/bin/python scripts/pipeline.py -c scripts/configs/med_eval_mini.yaml \
-    --models Qwen3-VL-2B-Instruct --skip-eval
-
-# 6. Quick test (2 samples per task)
-.venv/bin/python scripts/pipeline.py -c scripts/configs/med_eval_mini.yaml \
-    --models Qwen3-VL-2B-Instruct --limit 2 --no-judge
+# Local: parse + upload to Google Sheet
+pipeline.py -c scripts/configs/med_eval_mini.yaml \
+    --models Qwen3-VL-2B-Instruct --parse-only --upload
 ```
 
 ## Adding a New FGMoE Checkpoint
@@ -34,29 +44,51 @@ bash scripts/rebuild_env.sh
 1. Add model to `scripts/configs/med_eval_mini.yaml`:
 ```yaml
   - name: FGMoE-v15-B1
-    model_type: qwen3_vl          # or your custom model type
+    model_type: fgmoe_qwen3_vl
     pretrained: /path/to/checkpoint
     launch: multi
     params: "~2B"
-    max_pixels: 3211264
+    max_pixels: 1003520
     min_pixels: 200704
     attn_implementation: sdpa
     tags: [fgmoe]
 ```
 
-2. Run pipeline:
+2. Run on training machine:
 ```bash
-.venv/bin/python scripts/pipeline.py -c scripts/configs/med_eval_mini.yaml \
-    --models FGMoE-v15-B1 --yaml-group "FGMoE Checkpoints" --upload
+pipeline.py -c scripts/configs/med_eval_mini.yaml \
+    --models FGMoE-v15-B1 --no-parse
 ```
+
+3. Sync logs, parse, and upload locally:
+```bash
+rsync -az remote:project/logs/med_eval_mini/FGMoE-v15-B1/ logs/med_eval_mini/FGMoE-v15-B1/
+pipeline.py -c scripts/configs/med_eval_mini.yaml \
+    --models FGMoE-v15-B1 --parse-only --preview --yaml-group "FGMoE Checkpoints"
+pipeline.py -c scripts/configs/med_eval_mini.yaml \
+    --models FGMoE-v15-B1 --parse-only --upload --yaml-group "FGMoE Checkpoints"
+```
+
+## Pipeline Flags
+
+| Flag | Phase | Description |
+|------|-------|-------------|
+| `--no-parse` | eval+judge | Stop after eval/judge, skip parse and upload |
+| `--no-judge` | eval | Skip LLM judge (judge metrics show "-") |
+| `--parse-only` | parse | Skip eval+judge, parse existing logs only |
+| `--preview` | parse | Print formatted results table after parse |
+| `--upload` | upload | Push results YAML to Google Sheet |
+| `--skip-eval` | judge | Re-run judge on existing eval results |
+| `--limit N` | eval | Limit samples per task (testing only) |
+| `--dry-run` | all | Show commands without executing |
 
 ## Key Files
 
 | File | Purpose |
 |------|---------|
 | `scripts/pipeline.py` | Pipeline orchestrator |
-| `scripts/configs/med_eval_mini.yaml` | Model configs (19 models) |
-| `data/eval_results/med_eval_results.yaml` | Results + Sheet format definition |
+| `scripts/configs/med_eval_mini.yaml` | Model configs |
+| `data/eval_results/med_eval_results.yaml` | Results + Sheet format |
 | `scripts/run_eval.py` | Evaluation runner |
 | `scripts/posthoc_llm_judge.py` | LLM judge (Qwen3-VL-32B) |
 | `scripts/upload_eval_results.py` | Google Sheet uploader |

@@ -198,14 +198,7 @@ class Qwen3_VL(lmms):
         contexts, all_gen_kwargs, doc_to_visual, doc_id, task, split = zip(*chunk)
         task = task[0]
         split = split[0]
-        # In multi-GPU mode the dataset is padded to be divisible by num_processes.
-        # Padded samples have doc_ids beyond the dataset size → catch IndexError/KeyError.
-        visual_list = []
-        for ids in doc_id:
-            try:
-                visual_list.append(doc_to_visual[0](self.task_dict[task][split][ids]))
-            except (IndexError, KeyError):
-                visual_list.append(None)
+        visual_list = [doc_to_visual[0](self.task_dict[task][split][ids]) for ids in doc_id]
         gen_kwargs = all_gen_kwargs[0]
 
         until = gen_kwargs.get("until", [self.tokenizer.decode(self.eot_token_id)])
@@ -379,7 +372,12 @@ class Qwen3_VL(lmms):
             return -len(toks), x[0]
 
         pbar = tqdm(total=len(requests), disable=(self.rank != 0), desc="Model Responding")
-        re_ords = utils.Collator([reg.args for reg in requests], _collate, grouping=True)
+        re_ords = utils.Collator(
+            [reg.args for reg in requests],
+            _collate,
+            group_fn=lambda x: {"task": x[4]},  # group by task_name
+            grouping=True,
+        )
         chunks = re_ords.get_batched(n=self.batch_size, batch_fn=None)
         for chunk in chunks:
             results = run_with_oom_retry(self._process_chunk, chunk, self)
