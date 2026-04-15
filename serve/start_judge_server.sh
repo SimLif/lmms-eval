@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+
+# Load credentials (proxy, tokens) from .secrets/env if available
+SECRETS_ENV="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/.secrets/env"
+[ -f "$SECRETS_ENV" ] && source "$SECRETS_ENV"
 # ============================================================================
 # vLLM Judge Server Startup Script
 # ============================================================================
@@ -48,8 +52,6 @@ export HF_HUB_OFFLINE=1
 # Network proxy: fallback for any outbound requests that slip through
 # (e.g. a tokenizer file missing from local cache). The proxy is not
 # relied upon — HF_HUB_OFFLINE=1 handles the common case.
-export http_proxy="${http_proxy:-http://cmcproxy:WvUBhef4bQ@10.251.112.50:8128}"
-export https_proxy="${https_proxy:-http://cmcproxy:WvUBhef4bQ@10.251.112.50:8128}"
 
 # ============================================================================
 # GPU selection

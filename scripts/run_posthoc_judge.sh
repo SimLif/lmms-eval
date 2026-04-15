@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+
+# Load credentials (proxy, tokens) from .secrets/env if available
+SECRETS_ENV="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/.secrets/env"
+[ -f "$SECRETS_ENV" ] && source "$SECRETS_ENV"
 # ==============================================================================
 # One-shot: 启动 judge server + 运行 posthoc LLM judge + 关闭 server
 #
@@ -28,8 +32,6 @@ ok()    { echo -e "\033[1;32m[OK]\033[0m    $*"; }
 err()   { echo -e "\033[1;31m[ERROR]\033[0m $*" >&2; }
 
 # Proxy
-export http_proxy="${http_proxy:-http://cmcproxy:WvUBhef4bQ@10.251.112.50:8128}"
-export https_proxy="${https_proxy:-http://cmcproxy:WvUBhef4bQ@10.251.112.50:8128}"
 
 # ==============================================================================
 # Step 1: Start judge server

@@ -59,3 +59,6 @@ docs/plans/
 .worktrees/
 memory/plan.md
 MEDICAL_EVAL_PROGRESS.md
+
+# Secrets (credentials, keys, machine info)
+.secrets/

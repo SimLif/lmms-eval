@@ -16,8 +16,7 @@ from typing import Any
 SPREADSHEET_ID = "1JK1Fev_Lc7ra8Z6OoSQjS07PMSJ1uJ5vudDYLGrTVPc"
 CREDENTIALS_PATH = os.getenv(
     "GOOGLE_APPLICATION_CREDENTIALS",
-    "/root/paddlejob/workspace/env_run/hqguo/"
-    "gen-lang-client-0006411243-16ea362bce1d.json",
+    ".secrets/google_credentials.json",
 )
 
 # Columns: Model, MMMU-Med, VQA-RAD, SLAKE, PathVQA, PMC-VQA, OmniMedVQA, MedXpertQA, Avg.

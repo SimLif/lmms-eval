@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+
+# Load credentials (proxy, tokens) from .secrets/env if available
+SECRETS_ENV="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/.secrets/env"
+[ -f "$SECRETS_ENV" ] && source "$SECRETS_ENV"
 # ==============================================================================
 # 全量重建 lmms-eval 环境（B卡 sm_100 + CUDA 13.1 + PyTorch cu128）
 #
@@ -20,8 +24,6 @@ warn()  { echo -e "\033[1;33m[WARN]\033[0m  $*"; }
 err()   { echo -e "\033[1;31m[ERROR]\033[0m $*" >&2; }
 
 # Proxy
-export http_proxy="${http_proxy:-http://cmcproxy:WvUBhef4bQ@10.251.112.50:8128}"
-export https_proxy="${https_proxy:-http://cmcproxy:WvUBhef4bQ@10.251.112.50:8128}"
 
 # CUDA 编译配置
 export CUDA_HOME=/usr/local/cuda

@@ -1,0 +1,10 @@
+# Cluster machines — copy to ../.secrets/hosts.yaml and fill in values
+machines:
+  node1:
+    host: 10.x.x.x
+    port: 56683
+    user: root
+    ssh: "ssh -p 56683 -o StrictHostKeyChecking=no root@10.x.x.x"
+    gpus: 8x GPU
+    project_dir: /path/to/lmms-eval
+    notes: description

@@ -20,8 +20,7 @@ import yaml
 DEFAULT_DATA = "data/eval_results/med_eval_results.yaml"
 CREDENTIALS_PATH = os.getenv(
     "GOOGLE_APPLICATION_CREDENTIALS",
-    "/root/paddlejob/workspace/env_run/hqguo/"
-    "gen-lang-client-0006411243-16ea362bce1d.json",
+    ".secrets/google_credentials.json",
 )
 
 # Metric field keys (in YAML) → column indices start at 2
