@@ -40,6 +40,26 @@ GPU_IDS="${4:-}"  # e.g. "0,1,2,3" or "4,5,6,7"
 EXPECTED_VLLM="0.17.1"
 
 # ============================================================================
+# Model source resolution
+# ============================================================================
+#
+# MODEL may be either:
+#   (a) a HuggingFace hub id, e.g. "Qwen/Qwen3-VL-32B-Instruct"  — vLLM pulls
+#       from ~/.cache/huggingface/hub/ (or downloads if online).
+#   (b) an absolute filesystem path to a local snapshot, e.g.
+#       "/root/.../models/Qwen3-VL-32B-Instruct"                   — vLLM reads
+#       safetensors directly from that directory.
+#
+# When HF_HUB_OFFLINE=1 (we always set it below) and MODEL looks like a hub id
+# that is NOT cached locally, vLLM would silently hang on .list_repo_files().
+# Detect this case early and point the user at sync_judge_model.sh.
+
+MODEL_IS_LOCAL=0
+if [ -d "$MODEL" ]; then
+    MODEL_IS_LOCAL=1
+fi
+
+# ============================================================================
 # Environment variables
 # ============================================================================
 
@@ -48,6 +68,24 @@ EXPECTED_VLLM="0.17.1"
 # hangs indefinitely on offline nodes (or adds seconds of latency through
 # the proxy on connected nodes). The model is fully cached locally.
 export HF_HUB_OFFLINE=1
+
+# If MODEL is a hub id (not a local dir), verify it's actually cached. The
+# HuggingFace cache layout converts "Qwen/Qwen3-VL-32B-Instruct" → dir name
+# "models--Qwen--Qwen3-VL-32B-Instruct". Skipping this check under offline
+# mode means hanging on repo listing forever.
+if [ "$MODEL_IS_LOCAL" = "0" ]; then
+    HF_CACHE_DIR="${HF_HOME:-$HOME/.cache/huggingface}/hub"
+    # transform "Qwen/Qwen3-VL-32B-Instruct" → "models--Qwen--Qwen3-VL-32B-Instruct"
+    CACHE_SUBDIR="models--$(echo "$MODEL" | sed 's|/|--|g')"
+    if [ ! -d "$HF_CACHE_DIR/$CACHE_SUBDIR" ]; then
+        echo "[ERROR] MODEL='$MODEL' not cached at $HF_CACHE_DIR/$CACHE_SUBDIR" >&2
+        echo "[ERROR] and HF_HUB_OFFLINE=1 would cause an infinite hang." >&2
+        echo "[HINT]  Run scripts/sync_judge_model.sh first, then pass the local path:" >&2
+        echo "[HINT]    bash scripts/sync_judge_model.sh" >&2
+        echo "[HINT]    bash serve/start_judge_server.sh /root/.../models/Qwen3-VL-32B-Instruct" >&2
+        exit 1
+    fi
+fi
 
 # Network proxy: fallback for any outbound requests that slip through
 # (e.g. a tokenizer file missing from local cache). The proxy is not
@@ -101,7 +139,8 @@ fi
 
 VLLM_ARGS=(
     # --served-model-name: Makes the model accessible by its HuggingFace ID
-    # in the OpenAI-compatible API. Without this, vLLM uses an internal name
+    # (or absolute local path — same as the arg we pass to `vllm serve`) in
+    # the OpenAI-compatible API. Without this, vLLM uses an internal name
     # and clients get 404 "model not found" errors.
     --served-model-name "$MODEL"
 
@@ -148,6 +187,7 @@ fi
 
 echo "[INFO] Starting vLLM server"
 echo "[INFO]   model=$MODEL  port=$PORT  tp=$TP  vllm=$VLLM_VER"
+[ "$MODEL_IS_LOCAL" = "1" ] && echo "[INFO]   source=LOCAL_PATH"
 [ -n "${CUDA_VISIBLE_DEVICES:-}" ] && echo "[INFO]   CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES"
 echo "[INFO]   HF_HUB_OFFLINE=$HF_HUB_OFFLINE"
 
