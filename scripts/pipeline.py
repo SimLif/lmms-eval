@@ -459,6 +459,17 @@ def main():
         else:
             results_dir = f"{output_dir}/{model_name}/????"
 
+        # Assert *_results.json was emitted by lmms-eval, even under --no-parse.
+        # This guarantees the raw metrics file is always on disk after Phase 1,
+        # which matters for: (a) parse on a different machine later, (b)
+        # uploading to dashboards, (c) re-running judge without re-running eval.
+        if not args.dry_run and not args.parse_only:
+            rj = sorted(Path(results_dir).glob("*_results.json"))
+            if not rj:
+                log.error("Phase 1 finished but no *_results.json found in %s", results_dir)
+                sys.exit(1)
+            log.info("  results.json: %s", rj[-1])
+
         # Phase 2: Judge
         if not args.no_judge and not args.parse_only:
             try:
