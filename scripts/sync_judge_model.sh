@@ -44,9 +44,32 @@ count_shards() {
 
 SHARDS=$(count_shards "$TARGET")
 if [ "$SHARDS" -ge "$MIN_SHARDS" ]; then
-    SIZE=$(du -sh "$TARGET" 2>/dev/null | awk '{print $1}')
-    echo "[INFO] judge model ready at $TARGET (size: ${SIZE}, shards: ${SHARDS})"
-    exit 0
+    # Also verify shard count matches model.safetensors.index.json so we don't
+    # fast-path an incomplete / truncated rsync.
+    INDEX_JSON="$TARGET/model.safetensors.index.json"
+    if [ -f "$INDEX_JSON" ]; then
+        EXPECTED=$(python3 - <<PY 2>/dev/null
+import json, sys
+try:
+    with open("$INDEX_JSON") as f:
+        wm = json.load(f).get("weight_map", {})
+    print(len({v for v in wm.values()}))
+except Exception:
+    print(0)
+PY
+)
+        if [ -n "$EXPECTED" ] && [ "$EXPECTED" != "0" ] && [ "$SHARDS" -lt "$EXPECTED" ]; then
+            echo "[WARN] $TARGET has ${SHARDS} shards but index.json expects ${EXPECTED}; not fast-pathing."
+        else
+            SIZE=$(du -sh "$TARGET" 2>/dev/null | awk '{print $1}')
+            echo "[INFO] judge model ready at $TARGET (size: ${SIZE}, shards: ${SHARDS}/${EXPECTED:-$MIN_SHARDS})"
+            exit 0
+        fi
+    else
+        SIZE=$(du -sh "$TARGET" 2>/dev/null | awk '{print $1}')
+        echo "[INFO] judge model ready at $TARGET (size: ${SIZE}, shards: ${SHARDS}; no index.json to double-check)"
+        exit 0
+    fi
 fi
 
 echo "[INFO] $TARGET not complete yet (found ${SHARDS} shards, need >=${MIN_SHARDS})"
@@ -76,7 +99,13 @@ if [ -n "$FROM_NODE" ]; then
         echo "ERROR: .secrets/hosts.yaml missing; cannot look up --from-node" >&2
         exit 1
     fi
-    eval "$(python3 -c "
+    # Use the lmms-eval venv's python so PyYAML is guaranteed available
+    # (bare python3 on a fresh node won't have yaml).
+    _PY="uv run python3"
+    if ! command -v uv >/dev/null 2>&1; then
+        _PY="python3"
+    fi
+    eval "$($_PY -c "
 import os, sys, shlex, yaml
 with open('$HOSTS_YAML') as f:
     cfg = yaml.safe_load(f) or {}
