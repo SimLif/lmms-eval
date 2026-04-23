@@ -383,6 +383,66 @@ summary:
       medxpertqa: 22.25
       pubmedqa: 69.0
       avg: 42.89
+    - name: FGMoE-v20_g32_sphere_valid_validate_0422_step1953
+      params: ~2B
+      mmmu_med: 36.67
+      vqa_rad: 48.78
+      slake: 63.75
+      pathvqa: 39.87
+      pmc_vqa: 45.65
+      vqa_med: 12.74
+      omnimedvqa: 72.98
+      medxpertqa: 21.65
+      pubmedqa: 74.0
+      avg: 46.23
+    - name: FGMoE-v16_dense_scaling_vqa_heavy_0423_0423_step1953
+      params: ~2B
+      mmmu_med: 40.67
+      vqa_rad: 48.56
+      slake: 67.96
+      pathvqa: 42.0
+      pmc_vqa: 46.95
+      vqa_med: 12.74
+      omnimedvqa: 75.59
+      medxpertqa: 21.85
+      pubmedqa: 75.8
+      avg: 48.01
+    - name: FGMoE-v16_dense_scaling_vqa_heavy_0423_0423_step500
+      params: ~2B
+      mmmu_med: 41.33
+      vqa_rad: 48.34
+      slake: 62.18
+      pathvqa: 40.53
+      pmc_vqa: 46.5
+      vqa_med: 12.59
+      omnimedvqa: 69.18
+      medxpertqa: 20.25
+      pubmedqa: 63.0
+      avg: 44.88
+    - name: FGMoE-v16_dense_scaling_vqa_heavy_0423_0423_step1000
+      params: ~2B
+      mmmu_med: 44.0
+      vqa_rad: 48.12
+      slake: 66.48
+      pathvqa: 36.47
+      pmc_vqa: 47.45
+      vqa_med: 12.59
+      omnimedvqa: 74.95
+      medxpertqa: 21.15
+      pubmedqa: 74.6
+      avg: 47.31
+    - name: FGMoE-v16_dense_scaling_vqa_heavy_0423_0423_step1500
+      params: ~2B
+      mmmu_med: 38.0
+      vqa_rad: 51.88
+      slake: 65.47
+      pathvqa: 38.87
+      pmc_vqa: 47.25
+      vqa_med: 13.39
+      omnimedvqa: 73.13
+      medxpertqa: 21.95
+      pubmedqa: 74.2
+      avg: 47.13
 format:
   frozen_rows: 1
   frozen_columns: 2
@@ -448,3 +508,4 @@ format:
         red: 0.082
         green: 0.635
         blue: 0.286
+models: []
