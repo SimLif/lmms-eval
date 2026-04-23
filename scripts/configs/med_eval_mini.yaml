@@ -310,3 +310,63 @@ models:
     min_pixels: 200704
     attn_implementation: sdpa
     tags: [fgmoe]
+
+  - name: FGMoE-p1_pilot300_0422
+    model_type: fgmoe_qwen3_vl
+    pretrained: /tmp/fgmoe/p1_pilot_slim
+    launch: multi
+    params: "~2B"
+    max_pixels: 1003520
+    min_pixels: 200704
+    attn_implementation: sdpa
+    tags: [fgmoe]
+
+  - name: FGMoE-v20_g32_sphere_valid_validate_0422_step1953
+    model_type: fgmoe_qwen3_vl
+    pretrained: /tmp/fgmoe/slim_v20_g32_sphere_valid_validate_0422_step1953
+    launch: multi
+    params: "~2B"
+    max_pixels: 1003520
+    min_pixels: 200704
+    attn_implementation: sdpa
+    tags: [fgmoe]
+
+  - name: FGMoE-v16_dense_scaling_vqa_heavy_0423_0423_step500
+    model_type: qwen3_vl
+    pretrained: /tmp/fgmoe/slim_v16_dense_scaling_vqa_heavy_0423_0423_step500
+    launch: multi
+    params: "~2B"
+    max_pixels: 1003520
+    min_pixels: 200704
+    attn_implementation: sdpa
+    tags: [dense, qwen3_vl]
+
+  - name: FGMoE-v16_dense_scaling_vqa_heavy_0423_0423_step1000
+    model_type: qwen3_vl
+    pretrained: /tmp/fgmoe/slim_v16_dense_scaling_vqa_heavy_0423_0423_step1000
+    launch: multi
+    params: "~2B"
+    max_pixels: 1003520
+    min_pixels: 200704
+    attn_implementation: sdpa
+    tags: [dense, qwen3_vl]
+
+  - name: FGMoE-v16_dense_scaling_vqa_heavy_0423_0423_step1500
+    model_type: qwen3_vl
+    pretrained: /tmp/fgmoe/slim_v16_dense_scaling_vqa_heavy_0423_0423_step1500
+    launch: multi
+    params: "~2B"
+    max_pixels: 1003520
+    min_pixels: 200704
+    attn_implementation: sdpa
+    tags: [dense, qwen3_vl]
+
+  - name: FGMoE-v16_dense_scaling_vqa_heavy_0423_0423_step1953
+    model_type: qwen3_vl
+    pretrained: /tmp/fgmoe/slim_v16_dense_scaling_vqa_heavy_0423_0423_step1953
+    launch: multi
+    params: "~2B"
+    max_pixels: 1003520
+    min_pixels: 200704
+    attn_implementation: sdpa
+    tags: [dense, qwen3_vl]
