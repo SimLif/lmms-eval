@@ -1,3 +1,5 @@
+import os
+import subprocess
 from abc import ABC, abstractmethod
 
 from loguru import logger as eval_logger
@@ -23,6 +25,11 @@ class BaseLauncher(ABC):
         pass
 
     def __enter__(self):
+        # NOTE: no pre-flight gpu_clean here — it would lsof /dev/nvidia*
+        # and kill the current Python process (which has torch imported and
+        # opens /dev/nvidia for device detection). GPU pre-flight must run
+        # OUTSIDE the judge Python process — see eval_ckpt.sh / gen_launch.py
+        # Phase 2b hooks.
         self.launch()
         return self
 

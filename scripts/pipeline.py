@@ -236,9 +236,25 @@ def update_yaml(
     metrics: dict,
     yaml_group: str | None,
 ) -> None:
-    """Update or append model entry in the results YAML."""
+    """Update or append model entry in the results YAML.
+
+    Auto-creates the file (and parent dirs) with a minimal scaffold when
+    missing, so first-run evals don't crash on a bare repo checkout.
+    """
+    if not os.path.isfile(yaml_path):
+        os.makedirs(os.path.dirname(yaml_path) or ".", exist_ok=True)
+        with open(yaml_path, "w") as f:
+            yaml.dump({"summary": {"groups": []}, "models": []}, f,
+                      default_flow_style=False, sort_keys=False)
+        log.info("  Created new results YAML: %s", yaml_path)
+
     with open(yaml_path) as f:
         data = yaml.safe_load(f)
+    if data is None:
+        data = {}
+    data.setdefault("summary", {})
+    data["summary"].setdefault("groups", [])
+    data.setdefault("models", [])
 
     # Search for existing model by name
     found = False
@@ -392,7 +408,12 @@ Workflow:
 
     # Judge options
     jg = p.add_argument_group("judge options")
-    jg.add_argument("--judge-model", default="Qwen/Qwen3-VL-32B-Instruct")
+    # Prefer local Qwen3-VL-32B when present (HF_HUB_OFFLINE=1 in the judge
+    # launcher can't resolve HF repo IDs). Fall back to HF ID for pre-cached
+    # shared caches only.
+    _LOCAL_JUDGE = "/root/paddlejob/workspace/env_run/hqguo/models/Qwen3-VL-32B-Instruct"
+    jg.add_argument("--judge-model",
+                    default=(_LOCAL_JUDGE if os.path.isdir(_LOCAL_JUDGE) else "Qwen/Qwen3-VL-32B-Instruct"))
     jg.add_argument("--serve-gpu-ids", default="0,1,2,3")
     jg.add_argument("--serve-port", type=int, default=8000)
     jg.add_argument("--judge-workers", type=int, default=16)
@@ -472,6 +493,21 @@ def main():
 
         # Phase 2: Judge
         if not args.no_judge and not args.parse_only:
+            # Pre-judge gpu_clean: Phase 1 (eval subprocess) may have crashed or
+            # left stale CUDA contexts. Clean them before spawning the 32B judge.
+            # Safe here because pipeline.py itself has NOT imported torch (no
+            # /dev/nvidia FDs in this process). Must NOT be done inside the judge
+            # python process — see memory/feedback_gpu_clean_self_kill.md.
+            _pipeline_dir = Path(__file__).resolve().parent
+            _gpu_clean = _pipeline_dir.parent / "scripts" / "gpu_clean.sh"
+            if _gpu_clean.is_file():
+                log.info("Pre-judge GPU clean: %s", _gpu_clean)
+                try:
+                    subprocess.run(["bash", str(_gpu_clean)],
+                                   timeout=30, capture_output=True, check=False)
+                except Exception as e:
+                    log.warning("Pre-judge GPU clean skipped: %s", e)
+
             try:
                 judge_ok = run_judge(
                     results_dir,
