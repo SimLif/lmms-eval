@@ -83,8 +83,8 @@ dependencies = [
     "decord>=0.6.0",
     "medspacy==1.0.0",
     "vllm==0.11.0",
-    "flash-linear-attention>=0.4.1",
-    "causal-conv1d>=1.6.0",
+    # flash-linear-attention, causal-conv1d: CUDA compiled packages,
+    # installed via prebuilt whl / source in setup_env.sh (not uv sync)
 ]
 
 [project.optional-dependencies]
