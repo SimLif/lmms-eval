@@ -104,7 +104,7 @@ class FGMoEQwen3VL(Qwen3_VL):
             pretrained, max_pixels=max_pixels, min_pixels=min_pixels
         )
         self._tokenizer = AutoTokenizer.from_pretrained(pretrained)
-        self.system_prompt = "You are a helpful assistant."
+        self.system_prompt = None
         self.interleave_visuals = False
         self.reasoning_prompt = None
         self.use_custom_video_loader = False

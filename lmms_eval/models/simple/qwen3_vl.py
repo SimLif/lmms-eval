@@ -55,7 +55,7 @@ class Qwen3_VL(lmms):
         use_custom_video_loader: Optional[bool] = False,
         fps: Optional[float] = None,  # Only applicable if use_custom_video_loader is True
         max_image_size: Optional[int] = None,  # Only applicable if use_custom_video_loader is True
-        system_prompt: Optional[str] = "You are a helpful assistant.",
+        system_prompt: Optional[str] = None,
         interleave_visuals: Optional[bool] = False,
         reasoning_prompt: Optional[str] = None,
         **kwargs,
@@ -220,7 +220,7 @@ class Qwen3_VL(lmms):
             if "<image>" in context:
                 context = context.replace("<image>", "")
 
-            message = [{"role": "system", "content": self.system_prompt}]
+            message = [{"role": "system", "content": self.system_prompt}] if self.system_prompt else []
             if self.reasoning_prompt:
                 context = context.strip() + self.reasoning_prompt
                 contexts[i] = context
