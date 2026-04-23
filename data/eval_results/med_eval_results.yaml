@@ -443,6 +443,45 @@ summary:
       medxpertqa: 21.95
       pubmedqa: 74.2
       avg: 47.13
+    - name: FGMoE-v16_dense_scaling_B1_0423_0423_step1953
+      params: ~2B
+      mmmu_med: 41.33
+      vqa_rad: 47.67
+      slake: 67.86
+      pathvqa: 38.07
+      pmc_vqa: 46.65
+      vqa_med: 12.95
+      omnimedvqa: 75.74
+      medxpertqa: 21.9
+      pubmedqa: 73.0
+      avg: 47.24
+      notes: "sys=None; Dense bit-identical to sys=helpful (0/4060 samples diff)"
+    - name: FGMoE-v20_g32_sphere_valid_vqa_heavy_0423_0423_step1953
+      params: ~2B
+      mmmu_med: 45.33
+      vqa_rad: 50.55
+      slake: 66.76
+      pathvqa: 38.73
+      pmc_vqa: 47.5
+      vqa_med: 12.52
+      omnimedvqa: 75.44
+      medxpertqa: 21.25
+      pubmedqa: 72.8
+      avg: 47.88
+      notes: "sys=None; +0.86 vs sys=helpful 47.02 (MMMU +2.66pp)"
+    - name: FGMoE-v20_g32_sphere_valid_B1_0423_0423_step1953
+      params: ~2B
+      mmmu_med: 47.33
+      vqa_rad: 47.89
+      slake: 65.04
+      pathvqa: 39.53
+      pmc_vqa: 46.7
+      vqa_med: 11.0
+      omnimedvqa: 72.44
+      medxpertqa: 19.75
+      pubmedqa: 73.6
+      avg: 47.03
+      notes: "sys=None; +0.19 vs sys=helpful 46.84 (MMMU +2.00pp)"
 format:
   frozen_rows: 1
   frozen_columns: 2
