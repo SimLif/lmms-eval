@@ -148,6 +148,13 @@ summary:
           pathvqa: 35.53
           vqa_med: 15.12
           avg: 47.94
+        qwen3-235b-a22b-instruct-2507:
+          prompt: medevalkit_lenient_v1
+          vqa_rad: 60.98
+          slake: 68.0
+          pathvqa: 47.13
+          vqa_med: 33.5
+          avg: 53.82
     - name: Qwen2.5-VL-7B-Instruct
       params: 7B
       mmmu_med: 54.67
@@ -430,6 +437,13 @@ summary:
           pathvqa: 32.8
           vqa_med: 15.41
           avg: 49.34
+        qwen3-235b-a22b-instruct-2507:
+          prompt: medevalkit_lenient_v1
+          vqa_rad: 66.3
+          slake: 68.15
+          pathvqa: 46.8
+          vqa_med: 32.78
+          avg: 56.18
     - name: MedGemma-4b-it
       params: 4B
       mmmu_med: 46.67
@@ -445,6 +459,13 @@ summary:
           pathvqa: 33.13
           vqa_med: 12.16
           avg: 45.94
+        qwen3-235b-a22b-instruct-2507:
+          prompt: medevalkit_lenient_v1
+          vqa_rad: 74.72
+          slake: 70.53
+          pathvqa: 55.27
+          vqa_med: 38.49
+          avg: 55.2
     - name: Med-MoE-StableLM
       params: 1.6B
       mmmu_med: 29.33
