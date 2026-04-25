@@ -163,6 +163,13 @@ summary:
           pathvqa: 33.93
           vqa_med: 14.62
           avg: 47.67
+        qwen3-235b-a22b-instruct-2507:
+          prompt: medevalkit_lenient_v1
+          vqa_rad: 67.41
+          slake: 65.04
+          pathvqa: 46.67
+          vqa_med: 27.93
+          avg: 53.34
     - name: Qwen3.5-2B
       params: 2B
       mmmu_med: 44.67
@@ -208,6 +215,13 @@ summary:
           pathvqa: 33.47
           vqa_med: 13.31
           avg: 43.89
+        qwen3-235b-a22b-instruct-2507:
+          prompt: medevalkit_lenient_v1
+          vqa_rad: 58.54
+          slake: 60.74
+          pathvqa: 44.93
+          vqa_med: 29.45
+          avg: 49.46
     - name: Qwen3.5-2B-thinking
       params: 2B
       mmmu_med: 42.0
@@ -240,6 +254,13 @@ summary:
           pathvqa: 60.93
           vqa_med: 23.73
           avg: 61.57
+        qwen3-235b-a22b-instruct-2507:
+          prompt: medevalkit_lenient_v1
+          vqa_rad: 74.5
+          slake: 89.16
+          pathvqa: 71.8
+          vqa_med: 39.36
+          avg: 66.13
     - name: Hulu-Med-30A3
       params: 30B(3B)
       mmmu_med: 61.33
@@ -255,6 +276,13 @@ summary:
           pathvqa: 65.53
           vqa_med: 19.03
           avg: 61.43
+        qwen3-235b-a22b-instruct-2507:
+          prompt: medevalkit_lenient_v1
+          vqa_rad: 81.82
+          slake: 81.23
+          pathvqa: 75.87
+          vqa_med: 47.9
+          avg: 68.37
     - name: Lingshu-7B
       params: 7B
       mmmu_med: 82.0
@@ -270,6 +298,13 @@ summary:
           pathvqa: 57.0
           vqa_med: 20.69
           avg: 60.53
+        qwen3-235b-a22b-instruct-2507:
+          prompt: medevalkit_lenient_v1
+          vqa_rad: 68.96
+          slake: 85.48
+          pathvqa: 66.73
+          vqa_med: 34.37
+          avg: 65.15
     - name: Hulu-Med-32B
       params: 32B
       mmmu_med: 59.33
@@ -285,6 +320,13 @@ summary:
           pathvqa: 62.33
           vqa_med: 18.09
           avg: 59.25
+        qwen3-235b-a22b-instruct-2507:
+          prompt: medevalkit_lenient_v1
+          vqa_rad: 81.37
+          slake: 72.87
+          pathvqa: 73.2
+          vqa_med: 46.6
+          avg: 66.4
     - name: Hulu-Med-7B
       params: 7B
       mmmu_med: 56.0
@@ -300,6 +342,13 @@ summary:
           pathvqa: 62.53
           vqa_med: 15.77
           avg: 57.24
+        qwen3-235b-a22b-instruct-2507:
+          prompt: medevalkit_lenient_v1
+          vqa_rad: 76.05
+          slake: 74.16
+          pathvqa: 72.27
+          vqa_med: 43.92
+          avg: 63.94
     - name: Hulu-Med-14B
       params: 14B
       mmmu_med: 54.0
@@ -315,6 +364,13 @@ summary:
           pathvqa: 61.87
           vqa_med: 19.03
           avg: 56.95
+        qwen3-235b-a22b-instruct-2507:
+          prompt: medevalkit_lenient_v1
+          vqa_rad: 77.83
+          slake: 71.06
+          pathvqa: 71.53
+          vqa_med: 44.36
+          avg: 64.02
     - name: Hulu-Med-4B
       params: 4B
       mmmu_med: 52.67
@@ -330,6 +386,13 @@ summary:
           pathvqa: 58.33
           vqa_med: 17.08
           avg: 55.4
+        qwen3-235b-a22b-instruct-2507:
+          prompt: medevalkit_lenient_v1
+          vqa_rad: 73.84
+          slake: 77.22
+          pathvqa: 66.33
+          vqa_med: 40.88
+          avg: 61.84
     - name: Lingshu-I-8B
       params: 8B
       mmmu_med: 90.67
@@ -345,6 +408,13 @@ summary:
           pathvqa: 67.4
           vqa_med: 24.67
           avg: 64.57
+        qwen3-235b-a22b-instruct-2507:
+          prompt: medevalkit_lenient_v1
+          vqa_rad: 74.94
+          slake: 94.13
+          pathvqa: 75.53
+          vqa_med: 41.68
+          avg: 69.13
     - name: HuatuoGPT-Vision-7B
       params: 7B
       mmmu_med: 56.0
@@ -473,6 +543,13 @@ summary:
           pathvqa: 35.6
           vqa_med: 12.01
           avg: 42.89
+        qwen3-235b-a22b-instruct-2507:
+          prompt: medevalkit_lenient_v1
+          vqa_rad: 53.22
+          slake: 51.15
+          pathvqa: 47.2
+          vqa_med: 27.57
+          avg: 48.05
     - name: FGMoE-v20_g32_sphere_valid_validate_0422_step1953
       params: ~2B
       mmmu_med: 36.67
@@ -488,6 +565,13 @@ summary:
           pathvqa: 39.87
           vqa_med: 12.74
           avg: 46.23
+        qwen3-235b-a22b-instruct-2507:
+          prompt: medevalkit_lenient_v1
+          vqa_rad: 58.31
+          slake: 72.59
+          pathvqa: 48.6
+          vqa_med: 29.59
+          avg: 51.12
     - name: FGMoE-v16_dense_scaling_vqa_heavy_0423_0423_step1953
       params: ~2B
       mmmu_med: 40.67
@@ -503,6 +587,13 @@ summary:
           pathvqa: 42.0
           vqa_med: 12.74
           avg: 48.01
+        qwen3-235b-a22b-instruct-2507:
+          prompt: medevalkit_lenient_v1
+          vqa_rad: 57.43
+          slake: 74.16
+          pathvqa: 51.73
+          vqa_med: 28.94
+          avg: 52.57
     - name: FGMoE-v16_dense_scaling_vqa_heavy_0423_0423_step500
       params: ~2B
       mmmu_med: 41.33
@@ -518,6 +609,13 @@ summary:
           pathvqa: 40.53
           vqa_med: 12.59
           avg: 44.88
+        qwen3-235b-a22b-instruct-2507:
+          prompt: medevalkit_lenient_v1
+          vqa_rad: 58.31
+          slake: 70.58
+          pathvqa: 49.07
+          vqa_med: 30.46
+          avg: 49.85
     - name: FGMoE-v16_dense_scaling_vqa_heavy_0423_0423_step1000
       params: ~2B
       mmmu_med: 44.0
@@ -533,6 +631,13 @@ summary:
           pathvqa: 36.47
           vqa_med: 12.59
           avg: 47.31
+        qwen3-235b-a22b-instruct-2507:
+          prompt: medevalkit_lenient_v1
+          vqa_rad: 57.43
+          slake: 73.83
+          pathvqa: 46.47
+          vqa_med: 31.55
+          avg: 52.38
     - name: FGMoE-v16_dense_scaling_vqa_heavy_0423_0423_step1500
       params: ~2B
       mmmu_med: 38.0
@@ -548,6 +653,13 @@ summary:
           pathvqa: 38.87
           vqa_med: 13.39
           avg: 47.13
+        qwen3-235b-a22b-instruct-2507:
+          prompt: medevalkit_lenient_v1
+          vqa_rad: 60.98
+          slake: 71.92
+          pathvqa: 49.47
+          vqa_med: 28.58
+          avg: 51.72
     - name: FGMoE-v16_dense_scaling_B1_0423_0423_step1953
       params: ~2B
       mmmu_med: 41.33
@@ -564,6 +676,13 @@ summary:
           pathvqa: 38.07
           vqa_med: 12.95
           avg: 47.24
+        qwen3-235b-a22b-instruct-2507:
+          prompt: medevalkit_lenient_v1
+          vqa_rad: 56.98
+          slake: 75.93
+          pathvqa: 46.33
+          vqa_med: 32.42
+          avg: 52.25
     - name: FGMoE-v20_g32_sphere_valid_vqa_heavy_0423_0423_step1953
       params: ~2B
       mmmu_med: 45.33
@@ -580,6 +699,13 @@ summary:
           pathvqa: 38.73
           vqa_med: 12.52
           avg: 47.88
+        qwen3-235b-a22b-instruct-2507:
+          prompt: medevalkit_lenient_v1
+          vqa_rad: 58.31
+          slake: 73.97
+          pathvqa: 49.0
+          vqa_med: 28.0
+          avg: 51.66
     - name: FGMoE-v20_g32_sphere_valid_B1_0423_0423_step1953
       params: ~2B
       mmmu_med: 47.33
@@ -596,6 +722,13 @@ summary:
           pathvqa: 39.53
           vqa_med: 11.0
           avg: 47.03
+        qwen3-235b-a22b-instruct-2507:
+          prompt: medevalkit_lenient_v1
+          vqa_rad: 56.76
+          slake: 74.79
+          pathvqa: 48.07
+          vqa_med: 31.4
+          avg: 51.98
 format:
   frozen_rows: 1
   frozen_columns: 2
