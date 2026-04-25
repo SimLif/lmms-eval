@@ -425,12 +425,18 @@ Workflow:
 
     # Judge options
     jg = p.add_argument_group("judge options")
-    # Prefer local Qwen3-VL-32B when present (HF_HUB_OFFLINE=1 in the judge
-    # launcher can't resolve HF repo IDs). Fall back to HF ID for pre-cached
-    # shared caches only.
+    # Default-judge resolution order:
+    # 1. $JUDGE_MODEL env var (highest priority — set in .secrets/env when using
+    #    a remote judge API like ebill, where the model name is the API model id
+    #    e.g. "qwen3-235b-a22b-instruct-2507", NOT a local path).
+    # 2. local Qwen3-VL-32B path (legacy: vLLM auto-serve with HF_HUB_OFFLINE=1).
+    # 3. HF id "Qwen/Qwen3-VL-32B-Instruct" as last resort.
     _LOCAL_JUDGE = "/root/paddlejob/workspace/env_run/hqguo/models/Qwen3-VL-32B-Instruct"
-    jg.add_argument("--judge-model",
-                    default=(_LOCAL_JUDGE if os.path.isdir(_LOCAL_JUDGE) else "Qwen/Qwen3-VL-32B-Instruct"))
+    _DEFAULT_JUDGE = (
+        os.getenv("JUDGE_MODEL")
+        or (_LOCAL_JUDGE if os.path.isdir(_LOCAL_JUDGE) else "Qwen/Qwen3-VL-32B-Instruct")
+    )
+    jg.add_argument("--judge-model", default=_DEFAULT_JUDGE)
     jg.add_argument("--serve-gpu-ids", default="0,1,2,3")
     jg.add_argument("--serve-port", type=int, default=8000)
     jg.add_argument("--judge-workers", type=int, default=16)
