@@ -49,11 +49,27 @@ class ResponseParser:
 
     @staticmethod
     def parse_binary_response(response: str, output_format: str = "0/1") -> Union[int, bool]:
-        """Parse binary response (0/1 or yes/no)"""
-        response = response.strip().lower()
+        """Parse binary response (0/1 or yes/no).
+
+        Prefer an explicit ``<judge>X</judge>`` tag when present (lenient-prompt
+        convention); otherwise fall back to pattern matching over the full
+        response.
+        """
+        raw = response or ""
+        # Preferred: pull out the tagged judgement so we ignore anything the
+        # model wrote inside <think>...</think>.
+        tag_match = re.search(r"<judge>\s*([^<\s]+?)\s*</judge>", raw, re.IGNORECASE)
+        tagged = tag_match.group(1).strip().lower() if tag_match else None
+
+        response = raw.strip().lower()
 
         if output_format == "0/1" or output_format == "1/0":
-            # Match "1" as standalone token, bracketed, or in key-value patterns
+            if tagged is not None:
+                if tagged in ("1", "correct", "true", "yes"):
+                    return 1
+                if tagged in ("0", "incorrect", "false", "no"):
+                    return 0
+            # Fallback heuristics for legacy prompts without the tag.
             if any(pattern in response for pattern in ["[1]", "score: 1", "answer: 1"]):
                 return 1
             # Check for standalone "1" (not part of larger numbers like "10", "21")
@@ -62,6 +78,8 @@ class ResponseParser:
             return 0
         else:
             # yes/no format
+            if tagged is not None:
+                return tagged.startswith("yes") or tagged == "1"
             return response == "yes" or response.startswith("yes")
 
     @staticmethod

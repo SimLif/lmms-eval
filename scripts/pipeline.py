@@ -155,23 +155,40 @@ def run_judge(
     serve_port: int,
     workers: int,
     dry_run: bool,
+    judge_api_url: str | None = None,
+    judge_api_type: str = "openai",
 ) -> bool:
-    """Run posthoc LLM judge with auto-serve."""
+    """Run posthoc LLM judge.
+
+    - If ``judge_api_url`` is set, use remote OpenAI-compatible API (skip
+      local vLLM --auto_serve). Expects ``OPENAI_API_KEY`` in env.
+    - Otherwise: legacy auto-serve (spin up local vLLM on ``serve_gpu_ids``).
+    """
     cmd = [
         sys.executable, "scripts/posthoc_llm_judge.py",
         "--results_dir", results_dir,
         "--run_judge",
-        "--auto_serve",
         "--judge_model", judge_model,
-        "--serve_gpu_ids", serve_gpu_ids,
-        "--serve_port", str(serve_port),
         "--workers", str(workers),
     ]
+    if judge_api_url:
+        cmd += [
+            "--judge_api_type", judge_api_type,
+            "--judge_api_url", judge_api_url,
+        ]
+    else:
+        cmd += [
+            "--auto_serve",
+            "--serve_gpu_ids", serve_gpu_ids,
+            "--serve_port", str(serve_port),
+        ]
     if dry_run:
         cmd.append("--dry_run")
 
     log.info("Phase 2: JUDGE — %s", results_dir)
     log.info("  judge_model: %s", judge_model)
+    if judge_api_url:
+        log.info("  judge_api_url: %s (remote API, skipping vLLM auto-serve)", judge_api_url)
     log.info("  cmd: %s", " ".join(cmd))
 
     # setsid to prevent SIGTSTP issues
@@ -417,6 +434,14 @@ Workflow:
     jg.add_argument("--serve-gpu-ids", default="0,1,2,3")
     jg.add_argument("--serve-port", type=int, default=8000)
     jg.add_argument("--judge-workers", type=int, default=16)
+    # Remote-API judge (skips local vLLM start; uses OpenAI-compatible endpoint)
+    jg.add_argument("--judge-api-url", default=os.getenv("JUDGE_API_URL"),
+                    help="OpenAI-compatible base URL. If set, skip --auto_serve "
+                         "and call the remote API directly. "
+                         "Env fallback: $JUDGE_API_URL (set in .secrets/env; do not paste here).")
+    jg.add_argument("--judge-api-type", default="openai",
+                    help="API provider type (openai, anthropic, ...). "
+                         "Only relevant with --judge-api-url.")
 
     # YAML / output options
     yo = p.add_argument_group("output options")
@@ -498,15 +523,17 @@ def main():
             # Safe here because pipeline.py itself has NOT imported torch (no
             # /dev/nvidia FDs in this process). Must NOT be done inside the judge
             # python process — see memory/feedback_gpu_clean_self_kill.md.
-            _pipeline_dir = Path(__file__).resolve().parent
-            _gpu_clean = _pipeline_dir.parent / "scripts" / "gpu_clean.sh"
-            if _gpu_clean.is_file():
-                log.info("Pre-judge GPU clean: %s", _gpu_clean)
-                try:
-                    subprocess.run(["bash", str(_gpu_clean)],
-                                   timeout=30, capture_output=True, check=False)
-                except Exception as e:
-                    log.warning("Pre-judge GPU clean skipped: %s", e)
+            # Skip when using remote-API judge (no local GPU use).
+            if not args.judge_api_url:
+                _pipeline_dir = Path(__file__).resolve().parent
+                _gpu_clean = _pipeline_dir.parent / "scripts" / "gpu_clean.sh"
+                if _gpu_clean.is_file():
+                    log.info("Pre-judge GPU clean: %s", _gpu_clean)
+                    try:
+                        subprocess.run(["bash", str(_gpu_clean)],
+                                       timeout=30, capture_output=True, check=False)
+                    except Exception as e:
+                        log.warning("Pre-judge GPU clean skipped: %s", e)
 
             try:
                 judge_ok = run_judge(
@@ -516,6 +543,8 @@ def main():
                     str(args.serve_port),
                     args.judge_workers,
                     args.dry_run,
+                    judge_api_url=args.judge_api_url,
+                    judge_api_type=args.judge_api_type,
                 )
                 if not judge_ok:
                     log.warning("Judge failed — continuing with '-' for judge metrics")

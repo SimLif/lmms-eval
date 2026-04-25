@@ -1,32 +1,29 @@
 # Default prompts for different judge types
-BINARY_JUDGE_PROMPT = """You are a strict evaluator assessing answer correctness. You must output {positive} for fully correct answers and {negative} for any other case.
+#
+# BINARY_JUDGE_PROMPT: lenient semantic-match prompt inspired by MedEvalKit
+# (DAMO / Lingshu), with a normal 0/1 convention (1 = correct).
+# See /afs_.../memory/references/2026-04-24-open-ended-judge-analysis.md
+# for the analysis that motivated switching from the old "strict" prompt
+# to this lenient version — strict was rejecting semantically-equivalent
+# medical answers like "Lymphoma" vs "hematologic".
+BINARY_JUDGE_PROMPT = """Your task is to determine whether the user's answer is correct based on the provided question and standard answer.
+
+Be LENIENT: consider the user's answer correct ({positive}) if any of these hold:
+- The user's answer expresses a similar meaning as the standard answer.
+- The user's answer is another valid interpretation (e.g., a specific disease when the standard is the organ system it belongs to; a synonym; a clinically equivalent phrasing).
+- Only formatting / capitalization / spacing differs from the standard answer.
+- A numerical answer matches within reasonable precision (value and unit when required).
+
+Score {negative} only when the user's answer is clearly wrong — different organ, different disease, different finding, or semantically unrelated.
 
 # Input
-Question:
-```
-{question}
-```
-Ground Truth Answer:
-```
-{answer}
-```
-Model Prediction:
-```
-{prediction}
-```
+Question: {question}
+Standard answer: {answer}
+User's answer: {prediction}
 
-# Evaluation Rules
-- The model prediction may contain the reasoning process, you should spot the final answer from it.
-- For multiple-choice questions: Score {positive} if the predicted answer matches the ground truth answer, it can be directly in option letters or the content of the options.
-- For open-ended questions:
-  * Score {positive} if the prediction matches the answer semantically, it can be in different format.
-  * Score {negative} for partially correct answers or answers with extra incorrect information, even if the reasoning process is correct.
-- Ignore minor differences in formatting, capitalization, or spacing since the model may explain in a different way.
-- Treat numerical answers as correct if they match within reasonable precision
-- For questions requiring units, both value and unit must be correct
-
-# Strict Output format
-{positive} or {negative}"""
+# Output format (strict)
+<think>one-line reasoning</think>
+<judge>{positive} for correct, {negative} for incorrect</judge>"""
 
 
 COMPARATIVE_JUDGE_PROMPT = """We would like to request your feedback on the performance of two AI assistants in response to the user question displayed above.
@@ -57,12 +54,12 @@ The process or reasoning leading to the Solution is irrelevant, ONLY the correct
 Return only "{positive}" if the solution is correct or "{negative}" if it is incorrect.
 Only return "{positive}" or "{negative}" with no additional text or formatting.
 
-Question: 
+Question:
 {question}
 --------------------------------
 Correct Answer:
 {answer}
 --------------------------------
-Solution: 
+Solution:
 {prediction}
 --------------------------------"""
