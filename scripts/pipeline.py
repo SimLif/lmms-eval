@@ -97,16 +97,62 @@ def find_model_in_config(config: dict, name: str) -> dict | None:
 # Phase 1: Eval
 # ---------------------------------------------------------------------------
 
-_OOM_PATTERNS = ["OutOfMemoryError", "CUDA OOM", "CUDA out of memory", "exit=-9"]
+_OOM_LOG_PATTERNS = [
+    "OutOfMemoryError",
+    "CUDA OOM",
+    "CUDA out of memory",
+    "RuntimeError: CUDA error: out of memory",
+    "Cannot allocate memory",
+    "closing signal SIGTERM",
+    "ChildFailedError",
+]
 
 
 def _is_oom_in_log(log_path: str) -> bool:
     try:
         with open(log_path, errors="replace") as f:
             content = f.read()
-        return any(p in content for p in _OOM_PATTERNS)
+        return any(p in content for p in _OOM_LOG_PATTERNS)
     except OSError:
         return False
+
+
+def _is_probable_oom(returncode: int, log_path: str) -> bool:
+    """Classify a failed eval as probable OOM.
+
+    Signal priority:
+    1. returncode == -9 (SIGKILL — only fires for ``launch: single``; in
+       ``launch: multi`` accelerate normalizes to exit(1))
+    2. Log patterns (PyTorch OOM exceptions + torch elastic teardown messages
+       like "closing signal SIGTERM" / "ChildFailedError")
+    """
+    if returncode == -9:
+        return True
+    return _is_oom_in_log(log_path)
+
+
+def _gpu_cleanup_between_retries() -> None:
+    """Best-effort GPU cleanup between OOM retries.
+
+    INVARIANT: pipeline.py must NOT import torch at module level.
+    gpu_clean.sh kills processes holding /dev/nvidia FDs — if this process
+    has imported torch (even transitively), it will self-kill.
+    See memory/feedback_gpu_clean_self_kill.md.
+    """
+    clean_sh = Path(__file__).parent / "gpu_clean.sh"
+    if clean_sh.exists():
+        log.info("  running gpu_clean.sh between retries...")
+        try:
+            subprocess.run(
+                ["bash", str(clean_sh)],
+                timeout=30,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except (subprocess.TimeoutExpired, OSError) as e:
+            log.warning("  gpu_clean.sh: %s (continuing)", e)
+    import time
+    time.sleep(2)
 
 
 def run_eval(
@@ -115,8 +161,11 @@ def run_eval(
     batch_size: int | None,
     limit: int | None,
     dry_run: bool,
-) -> bool:
-    """Run evaluation via run_eval.py subprocess."""
+) -> tuple[bool, int]:
+    """Run evaluation via run_eval.py subprocess.
+
+    Returns (success, returncode).
+    """
     cmd = [
         sys.executable, "scripts/run_eval.py",
         "-c", config_path,
@@ -134,10 +183,10 @@ def run_eval(
 
     if dry_run:
         subprocess.run(cmd)
-        return True
+        return True, 0
 
     result = subprocess.run(cmd)
-    return result.returncode == 0
+    return result.returncode == 0, result.returncode
 
 
 def run_eval_with_bs_retry(
@@ -148,14 +197,19 @@ def run_eval_with_bs_retry(
     dry_run: bool,
     output_dir: str,
     min_bs: int = 1,
-    max_retries: int = 4,
 ) -> bool:
     """Run eval with automatic batch_size halving on OOM.
 
-    On OOM (detected via log patterns), halves batch_size and retries.
-    Gives up after *max_retries* halvings or when batch_size reaches *min_bs*.
+    OOM detection uses two signals (in priority order):
+    1. returncode == -9 (SIGKILL — single-GPU mode only)
+    2. Log file patterns (PyTorch OOM + torch elastic teardown for multi-GPU)
+
+    On OOM: halves batch_size, runs gpu_clean.sh, retries.
+    Terminates when batch_size reaches min_bs or after 5 halvings (safety cap).
     Non-OOM failures are not retried.
     """
+    from lmms_eval.models.model_utils.batch_utils import parse_batch_size
+
     config = load_eval_config(config_path)
     model_config = find_model_in_config(config, model_name)
 
@@ -163,30 +217,34 @@ def run_eval_with_bs_retry(
         batch_size = model_config.get("batch_size") or config.get("defaults", {}).get("batch_size")
     if batch_size is None:
         batch_size = 32
+    if isinstance(batch_size, str):
+        batch_size = parse_batch_size(batch_size)
 
     log_path = str(Path(output_dir) / model_name / f"{model_name}.log")
+    max_halvings = 5
+    halvings = 0
 
-    for attempt in range(max_retries + 1):
-        ok = run_eval(config_path, model_name, batch_size, limit, dry_run)
+    while True:
+        ok, returncode = run_eval(config_path, model_name, batch_size, limit, dry_run)
         if ok or dry_run:
             return True
 
-        if not _is_oom_in_log(log_path):
-            log.error("Non-OOM failure at batch_size=%d, not retrying", batch_size)
+        if not _is_probable_oom(returncode, log_path):
+            log.error("Non-OOM failure (rc=%d) at batch_size=%d, not retrying", returncode, batch_size)
             return False
 
-        if batch_size <= min_bs:
-            log.error("OOM at min batch_size=%d, giving up", batch_size)
+        if batch_size <= min_bs or halvings >= max_halvings:
+            log.error("OOM at batch_size=%d after %d halvings, giving up", batch_size, halvings)
             return False
 
         old_bs = batch_size
         batch_size = max(min_bs, batch_size // 2)
+        halvings += 1
         log.warning(
-            "OOM detected at batch_size=%d → retrying with %d (attempt %d/%d)",
-            old_bs, batch_size, attempt + 1, max_retries,
+            "OOM detected (rc=%d) at batch_size=%d → retrying with %d (%d/%d)",
+            returncode, old_bs, batch_size, halvings, max_halvings,
         )
-
-    return False
+        _gpu_cleanup_between_retries()
 
 
 # ---------------------------------------------------------------------------

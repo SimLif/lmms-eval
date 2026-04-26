@@ -156,20 +156,28 @@ class Qwen3_VL(Qwen3_VLSimple):
             group_fn=lambda x: x[2],
             grouping=True,
         )
-        chunks = re_ords.get_batched(n=self.batch_size, batch_fn=None)
-        num_iters = len(requests) // self.batch_size if len(requests) % self.batch_size == 0 else len(requests) // self.batch_size + 1
+        chunks = list(re_ords.get_batched(n=self.batch_size, batch_fn=None))
+        num_iters = len(chunks)
         pbar = tqdm(total=num_iters, disable=(self.rank != 0), desc="Model Responding")
         e2e_latency = 0
         total_tokens = 0
-        for chunk in chunks:
+        i = 0
+        while i < len(chunks):
+            cur_bs = self.batch_size_per_gpu
+            if len(chunks[i]) > cur_bs:
+                flat = [s for c in chunks[i:] for s in c]
+                chunks[i:] = [flat[j:j + cur_bs] for j in range(0, len(flat), cur_bs)]
+                pbar.total = len(chunks)
+                pbar.refresh()
             start_time = time.time()
-            results = run_with_oom_retry(self._process_chunk, chunk, self)
+            results = run_with_oom_retry(self._process_chunk, chunks[i], self)
             e2e_latency += time.time() - start_time
             for clean_ans, context, gen_kwargs, n_toks in results:
                 total_tokens += n_toks
                 res.append(clean_ans)
                 self.cache_hook.add_partial("generate_until", (context, gen_kwargs), clean_ans)
             pbar.update(1)
+            i += 1
         res = re_ords.get_original(res)
 
         avg_speed = total_tokens / e2e_latency if e2e_latency > 0 else 0
