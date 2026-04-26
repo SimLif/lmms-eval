@@ -256,6 +256,7 @@ _current_tf_version: str | None = None
 # transformers 4.49.0 requires tokenizers<0.22, so we must downgrade it.
 _TRANSFORMERS_COMPANIONS: dict[str, dict[str, str]] = {
     "4.49.0": {"tokenizers": "0.21.1"},
+    "5.2.0": {"huggingface_hub": "1.3.0"},
 }
 
 
