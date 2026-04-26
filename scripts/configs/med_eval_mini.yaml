@@ -9,7 +9,7 @@ defaults:
   task: med_eval_mini
   num_gpus: 8
   accelerate_port: 12346
-  batch_size: 32
+  batch_size: 128
   output_dir: logs/med_eval_mini
   vllm_tp: 8
   vllm_gpu_util: 0.80
@@ -104,6 +104,7 @@ models:
     model_type: internvl2
     pretrained: OpenGVLab/InternVL2_5-8B
     launch: multi
+    batch_size: 1
     transformers_version: "4.49.0"
     tags: [internvl]
 
