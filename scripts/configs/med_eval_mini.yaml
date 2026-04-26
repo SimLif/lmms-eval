@@ -113,6 +113,7 @@ models:
     model_type: internvl3
     pretrained: OpenGVLab/InternVL3-8B
     launch: multi
+    batch_size: 1
     tags: [internvl]
 
   - name: InternVL3_5-8B
@@ -120,6 +121,7 @@ models:
     model_type: internvl3_5
     pretrained: OpenGVLab/InternVL3_5-8B
     launch: multi
+    batch_size: 1
     tags: [internvl]
 
   # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
