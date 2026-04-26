@@ -71,7 +71,6 @@ models:
     model_type: qwen3_vl
     pretrained: /root/paddlejob/workspace/env_run/hqguo/models/Qwen3-VL-8B-Instruct
     launch: multi
-    batch_size: 8
     max_pixels: 3211264
     min_pixels: 200704
     attn_implementation: sdpa

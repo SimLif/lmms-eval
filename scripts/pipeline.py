@@ -97,6 +97,17 @@ def find_model_in_config(config: dict, name: str) -> dict | None:
 # Phase 1: Eval
 # ---------------------------------------------------------------------------
 
+_OOM_PATTERNS = ["OutOfMemoryError", "CUDA OOM", "CUDA out of memory", "exit=-9"]
+
+
+def _is_oom_in_log(log_path: str) -> bool:
+    try:
+        with open(log_path, errors="replace") as f:
+            content = f.read()
+        return any(p in content for p in _OOM_PATTERNS)
+    except OSError:
+        return False
+
 
 def run_eval(
     config_path: str,
@@ -127,6 +138,55 @@ def run_eval(
 
     result = subprocess.run(cmd)
     return result.returncode == 0
+
+
+def run_eval_with_bs_retry(
+    config_path: str,
+    model_name: str,
+    batch_size: int | None,
+    limit: int | None,
+    dry_run: bool,
+    output_dir: str,
+    min_bs: int = 1,
+    max_retries: int = 4,
+) -> bool:
+    """Run eval with automatic batch_size halving on OOM.
+
+    On OOM (detected via log patterns), halves batch_size and retries.
+    Gives up after *max_retries* halvings or when batch_size reaches *min_bs*.
+    Non-OOM failures are not retried.
+    """
+    config = load_eval_config(config_path)
+    model_config = find_model_in_config(config, model_name)
+
+    if batch_size is None and model_config:
+        batch_size = model_config.get("batch_size") or config.get("defaults", {}).get("batch_size")
+    if batch_size is None:
+        batch_size = 32
+
+    log_path = str(Path(output_dir) / model_name / f"{model_name}.log")
+
+    for attempt in range(max_retries + 1):
+        ok = run_eval(config_path, model_name, batch_size, limit, dry_run)
+        if ok or dry_run:
+            return True
+
+        if not _is_oom_in_log(log_path):
+            log.error("Non-OOM failure at batch_size=%d, not retrying", batch_size)
+            return False
+
+        if batch_size <= min_bs:
+            log.error("OOM at min batch_size=%d, giving up", batch_size)
+            return False
+
+        old_bs = batch_size
+        batch_size = max(min_bs, batch_size // 2)
+        log.warning(
+            "OOM detected at batch_size=%d → retrying with %d (attempt %d/%d)",
+            old_bs, batch_size, attempt + 1, max_retries,
+        )
+
+    return False
 
 
 # ---------------------------------------------------------------------------
@@ -491,9 +551,12 @@ def main():
                  args.upload)
         log.info("=" * 60)
 
-        # Phase 1: Eval
+        # Phase 1: Eval (with automatic batch_size halving on OOM)
         if not args.skip_eval and not args.parse_only:
-            ok = run_eval(args.config, model_name, args.batch_size, args.limit, args.dry_run)
+            ok = run_eval_with_bs_retry(
+                args.config, model_name, args.batch_size, args.limit,
+                args.dry_run, output_dir=output_dir,
+            )
             if not ok:
                 log.error("Eval failed for %s", model_name)
                 sys.exit(1)
