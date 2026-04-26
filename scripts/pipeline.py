@@ -189,6 +189,25 @@ def run_eval(
     return result.returncode == 0, result.returncode
 
 
+def _existing_results_json(output_dir: str, model_name: str) -> set[str]:
+    """Snapshot existing *_results.json paths before an eval attempt."""
+    base = Path(output_dir) / model_name
+    if not base.is_dir():
+        return set()
+    return {str(p) for p in base.glob("*/*_results.json")}
+
+
+def _has_new_results_json(output_dir: str, model_name: str, prior: set[str]) -> bool:
+    """Check whether a *_results.json was emitted that wasn't in *prior*."""
+    base = Path(output_dir) / model_name
+    if not base.is_dir():
+        return False
+    for p in base.glob("*/*_results.json"):
+        if str(p) not in prior:
+            return True
+    return False
+
+
 def run_eval_with_bs_retry(
     config_path: str,
     model_name: str,
@@ -200,12 +219,21 @@ def run_eval_with_bs_retry(
 ) -> bool:
     """Run eval with automatic batch_size halving on OOM.
 
-    OOM detection uses two signals (in priority order):
-    1. returncode == -9 (SIGKILL — single-GPU mode only)
-    2. Log file patterns (PyTorch OOM + torch elastic teardown for multi-GPU)
+    Success criteria (BOTH required):
+    1. run_eval.py returncode == 0
+    2. A NEW *_results.json was emitted by lmms-eval
+
+    Detection uses a pre-attempt snapshot of existing results.json paths,
+    then checks for any new path after the subprocess returns. This is
+    robust against filesystem mtime resolution and stale leftover files.
+
+    OOM detection: returncode == -9 (SIGKILL) OR log patterns OR
+    (returncode == 0 but no NEW results.json + OOM pattern in log).
+    The third case catches lmms-eval's `cli_evaluate` swallowing
+    torch.OutOfMemoryError and exiting cleanly.
 
     On OOM: halves batch_size, runs gpu_clean.sh, retries.
-    Terminates when batch_size reaches min_bs or after 5 halvings (safety cap).
+    Terminates when batch_size reaches min_bs or after 5 halvings.
     Non-OOM failures are not retried.
     """
     from lmms_eval.models.model_utils.batch_utils import parse_batch_size
@@ -225,11 +253,29 @@ def run_eval_with_bs_retry(
     halvings = 0
 
     while True:
+        prior_results = _existing_results_json(output_dir, model_name)
         ok, returncode = run_eval(config_path, model_name, batch_size, limit, dry_run)
-        if ok or dry_run:
+        if dry_run:
             return True
 
-        if not _is_probable_oom(returncode, log_path):
+        new_results = _has_new_results_json(output_dir, model_name, prior_results)
+        true_success = ok and new_results
+
+        if true_success:
+            return True
+
+        oom_signal = _is_probable_oom(returncode, log_path)
+        # Special case: returncode == 0 but no NEW results.json — lmms-eval
+        # likely swallowed an OOM exception. Treat as OOM if log has the pattern.
+        if returncode == 0 and not new_results and not oom_signal:
+            log.error(
+                "rc=0 but no new results.json AND no OOM/write-failure pattern at batch_size=%d — not retrying",
+                batch_size,
+            )
+            return False
+
+        is_oom_like = oom_signal or (returncode == 0 and not new_results)
+        if not is_oom_like:
             log.error("Non-OOM failure (rc=%d) at batch_size=%d, not retrying", returncode, batch_size)
             return False
 
