@@ -262,14 +262,9 @@ class Med_MoE_StableLM(lmms):
             prompt = conv.get_prompt()
             input_ids = tokenizer_image_token(prompt, self.tokenizer, IMAGE_TOKEN_INDEX, return_tensors="pt").unsqueeze(0).to(self.model.device)
 
-            if gen_kwargs.get("answer_type", None) == "closed":
-                stop_str = conv.sep if conv.sep_style != SeparatorStyle.TWO else conv.sep2
-                keywords = [stop_str]
-                stopping_criteria = KeywordsStoppingCriteria(keywords, self.tokenizer, input_ids)
-            else:
-                stop_str = conv.sep if conv.sep_style != SeparatorStyle.TWO else conv.sep2
-                keywords = [stop_str]
-                stopping_criteria = KeywordsStoppingCriteria(keywords, self.tokenizer, input_ids)
+            stop_str = conv.sep if conv.sep_style != SeparatorStyle.TWO else conv.sep2
+            keywords = [stop_str]
+            stopping_criteria = KeywordsStoppingCriteria(keywords, self.tokenizer, input_ids)
 
             # preconfigure gen_kwargs with defaults
             if "max_new_tokens" not in gen_kwargs:

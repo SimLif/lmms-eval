@@ -97,12 +97,14 @@ def find_model_in_config(config: dict, name: str) -> dict | None:
 # Phase 1: Eval
 # ---------------------------------------------------------------------------
 
-_OOM_LOG_PATTERNS = [
+_OOM_PRIMARY = [
     "OutOfMemoryError",
     "CUDA OOM",
     "CUDA out of memory",
     "RuntimeError: CUDA error: out of memory",
     "Cannot allocate memory",
+]
+_OOM_SECONDARY = [
     "closing signal SIGTERM",
     "ChildFailedError",
 ]
@@ -112,9 +114,15 @@ def _is_oom_in_log(log_path: str) -> bool:
     try:
         with open(log_path, errors="replace") as f:
             content = f.read()
-        return any(p in content for p in _OOM_LOG_PATTERNS)
     except OSError:
         return False
+    has_primary = any(p in content for p in _OOM_PRIMARY)
+    if has_primary:
+        return True
+    # Secondary patterns (generic crash) only count as OOM when a primary
+    # pattern also appears — otherwise a segfault or import error would
+    # trigger wasteful batch-halving retries.
+    return False
 
 
 def _is_probable_oom(returncode: int, log_path: str) -> bool:
@@ -236,7 +244,14 @@ def run_eval_with_bs_retry(
     Terminates when batch_size reaches min_bs or after 5 halvings.
     Non-OOM failures are not retried.
     """
-    from lmms_eval.models.model_utils.batch_utils import parse_batch_size
+    def _parse_batch_size(bs):
+        if isinstance(bs, int):
+            return bs
+        s = str(bs).strip()
+        if s.startswith("auto"):
+            parts = s.split(":")
+            return int(parts[1]) if len(parts) > 1 else 128
+        return int(s)
 
     config = load_eval_config(config_path)
     model_config = find_model_in_config(config, model_name)
@@ -246,7 +261,7 @@ def run_eval_with_bs_retry(
     if batch_size is None:
         batch_size = 32
     if isinstance(batch_size, str):
-        batch_size = parse_batch_size(batch_size)
+        batch_size = _parse_batch_size(batch_size)
 
     log_path = str(Path(output_dir) / model_name / f"{model_name}.log")
     max_halvings = 5
