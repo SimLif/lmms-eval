@@ -22,7 +22,7 @@ class JudgePromptBuilder:
         elif output_format == "1/0":
             positive, negative = ("1", "0")    # legacy strict: 1=correct
         else:
-            positive, negative = ("Yes", "No")
+            raise ValueError(f"Unknown output_format={output_format!r}, expected '0/1' or '1/0'")
 
         return BINARY_JUDGE_PROMPT.format(question=question, answer=answer, prediction=prediction, positive=positive, negative=negative)
 
@@ -85,10 +85,7 @@ class ResponseParser:
             # Default to incorrect when ambiguous
             return 0
         else:
-            # yes/no format
-            if tagged is not None:
-                return tagged.startswith("yes") or tagged == "0"
-            return response == "yes" or response.startswith("yes")
+            raise ValueError(f"Unknown output_format={output_format!r}, expected '0/1' or '1/0'")
 
     @staticmethod
     def parse_score_response(response: str, score_range: Optional[Tuple[float, float]] = None) -> float:
