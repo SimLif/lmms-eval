@@ -214,7 +214,7 @@ models:
     model_type: med_moe_phi
     pretrained: /root/paddlejob/workspace/env_run/hqguo/models/Med-MoE/stage3/llavaphi-2.7b-medmoe
     launch: single
-    gpu: 3
+    gpu: 0
     batch_size: 1
     tags: [baseline]
 
@@ -223,7 +223,7 @@ models:
     model_type: med_moe_stablelm
     pretrained: /root/paddlejob/workspace/env_run/hqguo/models/Med-MoE/stage3/llavastablelm-1.6b-medmoe
     launch: single
-    gpu: 4
+    gpu: 1
     batch_size: 1
     tags: [baseline]
 
