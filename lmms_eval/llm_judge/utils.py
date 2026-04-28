@@ -17,7 +17,7 @@ class JudgePromptBuilder:
         if custom_prompt:
             return custom_prompt.format(question=question, answer=answer, pred=prediction, prediction=prediction, **kwargs)
 
-        positive, negative = ("1", "0") if output_format == "0/1" or output_format == "1/0" else ("Yes", "No")
+        positive, negative = ("0", "1") if output_format == "0/1" or output_format == "1/0" else ("Yes", "No")
 
         return BINARY_JUDGE_PROMPT.format(question=question, answer=answer, prediction=prediction, positive=positive, negative=negative)
 
@@ -51,35 +51,36 @@ class ResponseParser:
     def parse_binary_response(response: str, output_format: str = "0/1") -> Union[int, bool]:
         """Parse binary response (0/1 or yes/no).
 
-        Prefer an explicit ``<judge>X</judge>`` tag when present (lenient-prompt
-        convention); otherwise fall back to pattern matching over the full
-        response.
+        MedEvalKit convention: 0 = correct, 1 = incorrect.
+        Internal return: 1 = correct, 0 = incorrect (unchanged for downstream).
+
+        Prefer an explicit ``<judge>X</judge>`` tag when present;
+        otherwise fall back to pattern matching over the full response.
         """
         raw = response or ""
-        # Preferred: pull out the tagged judgement so we ignore anything the
-        # model wrote inside <think>...</think>.
         tag_match = re.search(r"<judge>\s*([^<\s]+?)\s*</judge>", raw, re.IGNORECASE)
         tagged = tag_match.group(1).strip().lower() if tag_match else None
 
         response = raw.strip().lower()
 
         if output_format == "0/1" or output_format == "1/0":
+            # MedEvalKit: 0 = correct, 1 = incorrect
             if tagged is not None:
-                if tagged in ("1", "correct", "true", "yes"):
+                if tagged in ("0", "correct", "true", "yes"):
                     return 1
-                if tagged in ("0", "incorrect", "false", "no"):
+                if tagged in ("1", "incorrect", "false", "no"):
                     return 0
-            # Fallback heuristics for legacy prompts without the tag.
-            if any(pattern in response for pattern in ["[1]", "score: 1", "answer: 1"]):
+            # Fallback: look for <judge>0</judge> pattern in raw text
+            if any(pattern in response for pattern in ["[0]", "score: 0", "answer: 0"]):
                 return 1
-            # Check for standalone "1" (not part of larger numbers like "10", "21")
-            if re.search(r"(?<!\d)1(?!\d)", response):
+            if re.search(r"<judge>\s*0\s*</judge>", response):
                 return 1
+            # Default to incorrect when ambiguous
             return 0
         else:
             # yes/no format
             if tagged is not None:
-                return tagged.startswith("yes") or tagged == "1"
+                return tagged.startswith("yes") or tagged == "0"
             return response == "yes" or response.startswith("yes")
 
     @staticmethod
