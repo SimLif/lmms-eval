@@ -17,7 +17,12 @@ class JudgePromptBuilder:
         if custom_prompt:
             return custom_prompt.format(question=question, answer=answer, pred=prediction, prediction=prediction, **kwargs)
 
-        positive, negative = ("0", "1") if output_format == "0/1" or output_format == "1/0" else ("Yes", "No")
+        if output_format == "0/1":
+            positive, negative = ("0", "1")    # MedEvalKit: 0=correct
+        elif output_format == "1/0":
+            positive, negative = ("1", "0")    # legacy strict: 1=correct
+        else:
+            positive, negative = ("Yes", "No")
 
         return BINARY_JUDGE_PROMPT.format(question=question, answer=answer, prediction=prediction, positive=positive, negative=negative)
 
@@ -64,16 +69,18 @@ class ResponseParser:
         response = raw.strip().lower()
 
         if output_format == "0/1" or output_format == "1/0":
-            # MedEvalKit: 0 = correct, 1 = incorrect
+            # Determine which raw value means "correct"
+            correct_val = "0" if output_format == "0/1" else "1"
+            incorrect_val = "1" if output_format == "0/1" else "0"
+
             if tagged is not None:
-                if tagged in ("0", "correct", "true", "yes"):
+                if tagged in (correct_val, "correct", "true", "yes"):
                     return 1
-                if tagged in ("1", "incorrect", "false", "no"):
+                if tagged in (incorrect_val, "incorrect", "false", "no"):
                     return 0
-            # Fallback: look for <judge>0</judge> pattern in raw text
-            if any(pattern in response for pattern in ["[0]", "score: 0", "answer: 0"]):
+            if any(pattern in response for pattern in [f"[{correct_val}]", f"score: {correct_val}", f"answer: {correct_val}"]):
                 return 1
-            if re.search(r"<judge>\s*0\s*</judge>", response):
+            if re.search(rf"<judge>\s*{correct_val}\s*</judge>", response):
                 return 1
             # Default to incorrect when ambiguous
             return 0
