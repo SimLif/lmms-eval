@@ -254,9 +254,10 @@ _current_tf_version: str | None = None
 
 # Companion package versions for each transformers version.
 # transformers 4.49.0 requires tokenizers<0.22, so we must downgrade it.
+# Use hyphenated package names to match uv.lock / PyPI canonical naming.
 _TRANSFORMERS_COMPANIONS: dict[str, dict[str, str]] = {
     "4.49.0": {"tokenizers": "0.21.1"},
-    "5.2.0": {"huggingface_hub": "1.3.0"},
+    "5.2.0": {"huggingface-hub": "1.3.0"},
 }
 
 
@@ -335,10 +336,10 @@ def _get_lockfile_versions(package_names: list[str]) -> dict[str, str]:
         with open("uv.lock") as f:
             content = f.read()
         for name in package_names:
-            # Parse: name = "tokenizers"\nversion = "0.22.2"
             import re
-
-            pattern = rf'^name = "{re.escape(name)}"\nversion = "([^"]+)"'
+            # Normalize: uv.lock uses hyphenated names (PyPI canonical)
+            canonical = name.replace("_", "-").lower()
+            pattern = rf'^name = "{re.escape(canonical)}"\nversion = "([^"]+)"'
             match = re.search(pattern, content, re.MULTILINE)
             if match:
                 versions[name] = match.group(1)
