@@ -282,6 +282,7 @@ class Med_MoE_StableLM(lmms):
                 input_ids,
                 images=image_tensor,
                 pad_token_id=pad_token_id,
+                eos_token_id=self.eot_token_id,
                 do_sample=True if gen_kwargs["temperature"] > 0 else False,
                 temperature=gen_kwargs["temperature"],
                 max_new_tokens=gen_kwargs["max_new_tokens"],
