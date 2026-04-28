@@ -84,6 +84,7 @@ class Med_MoE_StableLM(lmms):
             pretrained,
             use_fast=False,
             padding_side="right",
+            trust_remote_code=True,
         )
         self._config = self._model.config
         mm_use_im_start_end = getattr(self.config, "mm_use_im_start_end", False)
