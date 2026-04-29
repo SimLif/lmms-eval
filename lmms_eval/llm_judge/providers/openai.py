@@ -1,5 +1,6 @@
 import base64
 import os
+import random
 import time
 from io import BytesIO
 from typing import Dict, List, Optional, Union
@@ -80,7 +81,7 @@ class OpenAIProvider(ServerInterface):
             except Exception as e:
                 eval_logger.warning(f"Attempt {attempt + 1}/{config.num_retries} failed: {str(e)}")
                 if attempt < config.num_retries - 1:
-                    time.sleep(config.retry_delay)
+                    time.sleep(random.uniform(0, 5))
                 else:
                     eval_logger.error(f"All {config.num_retries} attempts failed")
                     raise
