@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 # Configuration for retry logic
-DEFAULT_NUM_RETRIES = 100
+DEFAULT_NUM_RETRIES = 200
 DEFAULT_RETRY_DELAY = 2  # seconds (base; actual uses random jitter)
 
 

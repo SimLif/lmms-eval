@@ -90,8 +90,8 @@ def _judge_single(
     gt_ans: str,
     pred_ans: str,
     server: ServerInterface,
-) -> tuple[int, float]:
-    """Judge a single sample. Returns (idx, score)."""
+) -> tuple[int, float, str]:
+    """Judge a single sample. Returns (idx, score, status)."""
     try:
         result = server.evaluate_binary(
             question=question,
@@ -100,12 +100,12 @@ def _judge_single(
             output_format="0/1",
         )
     except Exception as e:
-        print(f"  Judge call failed: {e!s}")
-        return idx, 0.0
+        print(f"  Judge call failed (all retries exhausted): {e!s}")
+        return idx, -1.0, "timeout"
 
     if result.get("success") and result.get("result") is not None:
-        return idx, 100.0 if result["result"] == 1 else 0.0
-    return idx, 0.0
+        return idx, 100.0 if result["result"] == 1 else 0.0, "ok"
+    return idx, 0.0, "ok"
 
 
 def run_judge_on_task(
@@ -226,11 +226,13 @@ def run_judge_on_task(
             }
 
             for future in as_completed(futures):
-                idx, score = future.result()
+                idx, score, status = future.result()
+                if status == "timeout":
+                    samples[idx]["llm_judge_status"] = "timeout"
+                    score = -1.0
                 samples[idx].setdefault("llm_judges", {})[
                     judge_model_name
                 ] = score
-                # Update backward-compat fields to point to current judge
                 samples[idx]["llm_judge"] = score
                 samples[idx]["llm_judge_model"] = judge_model_name
                 completed += 1
@@ -239,10 +241,12 @@ def run_judge_on_task(
 
                 if completed % 100 == 0 or completed == len(work_items):
                     total_done = already_judged + completed
+                    timeouts = sum(1 for s in samples if s.get("llm_judge_status") == "timeout")
                     print(
                         f"  [{task_name}] {total_done}/{total} "
                         f"(acc: {correct_so_far}/{total_done} = "
-                        f"{correct_so_far / total_done * 100:.1f}%)"
+                        f"{correct_so_far / total_done * 100:.1f}%"
+                        f"{f', timeouts={timeouts}' if timeouts else ''})"
                     )
 
     # Ensure every sample's llm_judge/llm_judge_model points to current judge
