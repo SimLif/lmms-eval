@@ -81,7 +81,7 @@ class OpenAIProvider(ServerInterface):
             except Exception as e:
                 eval_logger.warning(f"Attempt {attempt + 1}/{config.num_retries} failed: {str(e)}")
                 if attempt < config.num_retries - 1:
-                    time.sleep(random.uniform(0, 5))
+                    time.sleep(random.uniform(0, 2))
                 else:
                     eval_logger.error(f"All {config.num_retries} attempts failed")
                     raise
