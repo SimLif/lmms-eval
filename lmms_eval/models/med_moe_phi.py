@@ -60,8 +60,9 @@ class Med_MoE_Phi(lmms):
         # MoE gating uses deepspeed.comm.all_reduce, which requires
         # a distributed backend. Initialize one for single-GPU eval.
         if not torch.distributed.is_initialized():
+            _port = os.environ.get("MASTER_PORT", "29765")
             torch.distributed.init_process_group(
-                backend="nccl", init_method="tcp://127.0.0.1:29765",
+                backend="nccl", init_method=f"tcp://127.0.0.1:{_port}",
                 world_size=1, rank=0,
             )
         import deepspeed
