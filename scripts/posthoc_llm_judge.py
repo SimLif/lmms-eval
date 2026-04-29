@@ -251,6 +251,7 @@ def run_judge_on_task(
         if judge_score is not None:
             sample["llm_judge"] = judge_score
             sample["llm_judge_model"] = judge_model_name
+            sample["llm_judge_prompt_version"] = "medevalkit_0/1"
 
     # Write updated samples
     with open(filepath, "w") as f:
